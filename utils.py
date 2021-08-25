@@ -33,7 +33,7 @@ def vector_to_tril(vector, n):
     ValueError
         If n is negative.
     """
-    assert vector.shape[0] == n**2 / 2 + n / 2
+    assert vector.shape[0] == int(n**2 / 2 + n / 2)
     # zeroed lower triangle
     dens = torch.zeros((n, n)).double()
     idx = torch.tril_indices(row=n, col=n, offset=0)
