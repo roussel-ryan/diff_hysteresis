@@ -16,14 +16,14 @@ def gaussian_density(xx, yy):
     return dens.reshape(xx.shape[0], xx.shape[1])
 
 def generate_dataset():
-    h = np.append(np.linspace(-1.0, 1.0, 10), np.flipud(np.linspace(-1.0, 1.0, 10)))
+    h = np.append(np.linspace(-1.0, 1.0, 20), np.flipud(np.linspace(-1.0, 1.0, 20)))
     n = 100
     h_sat = 1.0
     xx, yy = utils.generate_mesh(h_sat, n)
     synthetic_mu = gaussian_density(xx, yy)
-
+    states = numerical_hysteresis.state(xx, yy, h_sat, h)
     mu_vector = utils.tril_to_vector(synthetic_mu, n)
-    b = numerical_hysteresis.discreteIntegral(xx, yy, 0.8, 2, mu_vector, h,n)
+    b = numerical_hysteresis.discreteIntegral(xx, yy, 0.8, 2, mu_vector, h,n, states)
     
     return h, b
 

@@ -63,7 +63,7 @@ def state(xx, yy, h_sat, h):
     return states
 
 
-def discreteIntegral(xx, yy, h_sat, b_sat, dens_i, h, n):
+def discreteIntegral(xx, yy, h_sat, b_sat, dens_i, h, n, states):
     """Returns the resulting magnetic field as an array equal
     in size to the applied magnetic field vector. The function
     computes the Hadamard product of the state matrix with the 
@@ -105,7 +105,6 @@ def discreteIntegral(xx, yy, h_sat, b_sat, dens_i, h, n):
     """
 
     b = torch.empty(len(h))  # b is the resulting magnetic field
-    states = state(xx,yy, h_sat, h)
     dens = utils.vector_to_tril(dens_i, n)
     a = b_sat / torch.sum(dens)
     for i in range(len(h)):
