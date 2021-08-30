@@ -64,7 +64,7 @@ def state(xx, yy, h_sat, h):
 
 
 def discreteIntegral(xx, yy, h_sat, b_sat, dens_i, h, n, states):
-    """Returns the resulting magnetic field as an array equal
+    """Returns the resulting magnetic field as a tensor equal
     in size to the applied magnetic field vector. The function
     computes the Hadamard product of the state matrix with the 
     density matrix. This gives the magnetic field for each coordinate
@@ -86,14 +86,17 @@ def discreteIntegral(xx, yy, h_sat, b_sat, dens_i, h, n, states):
     b_sat : float
         Magnetic B field at saturation
     
-    dens_i : array, 
+    dens_i : tensor, 
         A vector of dummy values for the initial density. The
         size must be n**2/2 + n/2 to populate the upper triangle,
         including the diagonal. 
 
-    h : array,
+    h : tensor,
         The applied magnetic field H_1:t={H_1, ... ,H_t}, where 
         t represents each time step. 
+        
+    states: tensor
+        Magnetic hysteresis state as an mxnxn tensor
 
     Raises
     ------
