@@ -15,8 +15,8 @@ def gaussian_density(xx, yy):
 
     return dens.reshape(xx.shape[0], xx.shape[1])
 
-def generate_dataset():
-    h = np.append(np.linspace(-1.0, 1.0, 20), np.flipud(np.linspace(-1.0, 1.0, 20)))
+def generate_dataset(n_data):
+    h = np.append(np.linspace(-1.0, 1.0, n_data), np.flipud(np.linspace(-1.0, 1.0, n_data)))
     n = 100
     h_sat = 1.0
     xx, yy = utils.generate_mesh(h_sat, n)
