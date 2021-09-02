@@ -95,7 +95,7 @@ def discreteIntegral(xx, yy, h_sat, b_sat, dens_i, h, n, states):
         The applied magnetic field H_1:t={H_1, ... ,H_t}, where 
         t represents each time step. 
         
-    states: tensor
+    states: tensor,
         Magnetic hysteresis state as an mxnxn tensor
 
     Raises

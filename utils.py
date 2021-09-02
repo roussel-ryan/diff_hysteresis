@@ -8,6 +8,10 @@ def generate_mesh(h_sat, n):
     xx, yy = np.meshgrid(xvalues, yvalues)
     return torch.tensor(xx), torch.tensor(yy)
 
+def gen_xi(n):
+    x = torch.rand(int(n**2 / 2 + n / 2)).double()
+    x.requires_grad=True 
+    return x
 
 def vector_to_tril(vector, n):
     """Returns a simulated hysterion density as an nxn tensor.
