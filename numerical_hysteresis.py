@@ -15,7 +15,6 @@ import torch
 
 # note xx.shape=yy.shape=(n,n)
 
-
 def state(xx, yy, h_sat, h):
     """Returns magnetic hysteresis state as an mxnxn tensor, where 
     m is the number of distinct applied magnetic fields. The 
@@ -51,17 +50,16 @@ def state(xx, yy, h_sat, h):
 
     hyst_state = torch.ones(xx.shape)*-1  # n x n matrix of hysterion magnetization state given (a,b)
     # starts off off
-    h = torch.cat((torch.tensor([-h_sat]), torch.tensor(h)))  # H_0=-t, negative saturation limit
-    states = torch.empty((len(h), xx.shape[0], xx.shape[1]))  # list of hysteresis states
-    for i in range(len(h)):
-        if h[i] > h[i - 1]:
-            hyst_state = torch.tensor([[hyst_state[j][k] if yy[j][k] >= h[i] else 1 for k in range(len(yy[j]))] for j in range(len(yy))])
-        elif h[i] < h[i - 1]:
-            hyst_state = torch.tensor([[hyst_state[j][k] if xx[j][k] <= h[i] else -1 for k in range(len(yy[j]))] for j in range(len(xx))])
+    hs = torch.cat((torch.tensor([-h_sat]), torch.tensor(h)))  # H_0=-t, negative saturation limit
+    states = torch.empty((len(hs), xx.shape[0], xx.shape[1]))  # list of hysteresis states
+    for i in range(len(hs)):
+        if hs[i] > hs[i - 1]:
+            hyst_state = torch.tensor([[hyst_state[j][k] if yy[j][k] >= hs[i] else 1 for k in range(len(yy[j]))] for j in range(len(yy))])
+        elif hs[i] < hs[i - 1]:
+            hyst_state = torch.tensor([[hyst_state[j][k] if xx[j][k] <= hs[i] else -1 for k in range(len(yy[j]))] for j in range(len(xx))])
         hyst_state = torch.tril(hyst_state)
         states[i] = hyst_state
     return states
-
 
 def discreteIntegral(xx, yy, h_sat, b_sat, dens_i, h, n, states):
     """Returns the resulting magnetic field as a tensor equal

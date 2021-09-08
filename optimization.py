@@ -76,7 +76,7 @@ def plot_lfunc(loss):
     plt.ylabel('Loss')
     
 def plot_density(x, n):
-    fig_dens = plt.figure()
+#     fig_dens = plt.figure()
     mat = utils.vector_to_tril(x, n)
     plt.imshow(mat, origin="lower")
     plt.colorbar()
@@ -85,7 +85,7 @@ def plot_loops(h, m, m_pred, m_start):
     fig_loops = plt.figure()
     plt.plot(h, m, 'o')
     plt.plot(h, m_pred)
-    plt.plot(h, m_start)
+#     plt.plot(h, m_start)
     plt.title('Magnetic Hysteresis Loops')
     plt.xlabel('Applied Magnetic Field, $H$')
     plt.ylabel('Resulting Magnetization, $M$')
@@ -109,14 +109,8 @@ def optimize(num_points, h, m, h_sat, b_sat, lfunc, alpha, num_iterations):
     m_pred = numerical_hysteresis.discreteIntegral(xx, yy, h_sat, b_sat, x_star, h, num_points, states)
     m_start = numerical_hysteresis.discreteIntegral(xx, yy, h_sat, b_sat, x_start, h, num_points, states)
     
-    # Plot the trajectory of the loss function
-    plot_lfunc(history_f)
+    return history_f, x_star, num_points, h, m, m_pred, m_start
     
-    # Plot optimized hysterion density distribution
-    plot_density(x_star, num_points)
-    
-    # Plot H x M hysteresis loop
-    plot_loops(h, m, m_pred, m_start)
 
 
 # In[6]:

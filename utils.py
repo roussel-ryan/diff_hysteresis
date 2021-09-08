@@ -3,8 +3,11 @@ import numpy as np
 
 
 def generate_mesh(h_sat, n):
-    xvalues = np.linspace(-h_sat, h_sat, n)
-    yvalues = np.linspace(-h_sat, h_sat, n)
+    return generate_asym_mesh(-h_sat, h_sat, n)
+
+def generate_asym_mesh(h_min, h_max, n):
+    xvalues = np.linspace(h_min, h_max, n)
+    yvalues = np.linspace(h_min, h_max, n)
     xx, yy = np.meshgrid(xvalues, yvalues)
     return torch.tensor(xx), torch.tensor(yy)
 
