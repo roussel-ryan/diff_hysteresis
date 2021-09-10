@@ -85,7 +85,7 @@ def plot_loops(h, m, m_pred, m_start):
     fig_loops = plt.figure()
     plt.plot(h, m, 'o')
     plt.plot(h, m_pred)
-#     plt.plot(h, m_start)
+    # plt.plot(h, m_start)
     plt.title('Magnetic Hysteresis Loops')
     plt.xlabel('Applied Magnetic Field, $H$')
     plt.ylabel('Resulting Magnetization, $M$')
