@@ -75,10 +75,10 @@ def plot_lfunc(loss):
     plt.xlabel('Iterations')
     plt.ylabel('Loss')
     
-def plot_density(x, n):
+def plot_density(x, xx, yy, n):
 #     fig_dens = plt.figure()
     mat = utils.vector_to_tril(x, n)
-    plt.imshow(mat, origin="lower")
+    plt.pcolor(xx, yy, mat)
     plt.colorbar()
     
 def plot_loops(h, m, m_pred, m_start):
