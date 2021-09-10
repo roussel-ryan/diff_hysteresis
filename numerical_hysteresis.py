@@ -47,7 +47,6 @@ def state(xx, yy, h_sat, h):
     ValueError
         If n is negative.
     """
-
     hyst_state = torch.ones(xx.shape)*-1  # n x n matrix of hysterion magnetization state given (a,b)
     # starts off off
     hs = torch.cat((torch.tensor([-h_sat]), torch.tensor(h)))  # H_0=-t, negative saturation limit
