@@ -3,11 +3,18 @@ import numpy as np
 
 
 def generate_mesh(h_sat, n):
-    xvalues = np.linspace(-h_sat, h_sat, n)
-    yvalues = np.linspace(-h_sat, h_sat, n)
+    return generate_asym_mesh(-h_sat, h_sat, n)
+
+def generate_asym_mesh(h_min, h_max, n):
+    xvalues = np.linspace(h_min, h_max, n)
+    yvalues = np.linspace(h_min, h_max, n)
     xx, yy = np.meshgrid(xvalues, yvalues)
     return torch.tensor(xx), torch.tensor(yy)
 
+def gen_xi(n):
+    x = torch.rand(int(n**2 / 2 + n / 2)).double()
+    x.requires_grad=True 
+    return x
 
 def vector_to_tril(vector, n):
     """Returns a simulated hysterion density as an nxn tensor.
@@ -33,7 +40,7 @@ def vector_to_tril(vector, n):
     ValueError
         If n is negative.
     """
-    assert vector.shape[0] == n**2 / 2 + n / 2
+    assert vector.shape[0] == int(n**2 / 2 + n / 2)
     # zeroed lower triangle
     dens = torch.zeros((n, n)).double()
     idx = torch.tril_indices(row=n, col=n, offset=0)

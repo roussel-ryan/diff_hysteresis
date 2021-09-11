@@ -15,7 +15,6 @@ import torch
 
 # note xx.shape=yy.shape=(n,n)
 
-
 def state(xx, yy, h_sat, h):
     """Returns magnetic hysteresis state as an mxnxn tensor, where 
     m is the number of distinct applied magnetic fields. The 
@@ -48,25 +47,21 @@ def state(xx, yy, h_sat, h):
     ValueError
         If n is negative.
     """
-
-    hyst_state = np.empty(xx.shape)  # n x n matrix of hysterion magnetization state given (a,b)
-    hyst_state.fill(-1)  # starts off off
-    h = np.append(-h_sat, h)  # H_0=-t, negative saturation limit
-    states = np.empty((len(h), xx.shape[0], xx.shape[1]))  # list of hysteresis states
-    for i in range(len(h)):
-        if h[i] > h[i - 1]:
-            hyst_state = [[hyst_state[j][k] if yy[j][k] >= h[i] else 1 for k in range(len(yy[j]))] for j in
-                          range(len(yy))]
-        elif h[i] < h[i - 1]:
-            hyst_state = [[hyst_state[j][k] if xx[j][k] <= h[i] else -1 for k in range(len(yy[j]))] for j in
-                          range(len(xx))]
-        hyst_state = np.tril(hyst_state)
+    hyst_state = torch.ones(xx.shape)*-1  # n x n matrix of hysterion magnetization state given (a,b)
+    # starts off off
+    hs = torch.cat((torch.tensor([-h_sat]), torch.tensor(h)))  # H_0=-t, negative saturation limit
+    states = torch.empty((len(hs), xx.shape[0], xx.shape[1]))  # list of hysteresis states
+    for i in range(len(hs)):
+        if hs[i] > hs[i - 1]:
+            hyst_state = torch.tensor([[hyst_state[j][k] if yy[j][k] >= hs[i] else 1 for k in range(len(yy[j]))] for j in range(len(yy))])
+        elif hs[i] < hs[i - 1]:
+            hyst_state = torch.tensor([[hyst_state[j][k] if xx[j][k] <= hs[i] else -1 for k in range(len(yy[j]))] for j in range(len(xx))])
+        hyst_state = torch.tril(hyst_state)
         states[i] = hyst_state
     return states
 
-
-def discreteIntegral(xx, yy, h_sat, b_sat, dens_i, h):
-    """Returns the resulting magnetic field as an array equal
+def discreteIntegral(xx, yy, h_sat, b_sat, dens_i, h, n, states):
+    """Returns the resulting magnetic field as a tensor equal
     in size to the applied magnetic field vector. The function
     computes the Hadamard product of the state matrix with the 
     density matrix. This gives the magnetic field for each coordinate
@@ -88,14 +83,17 @@ def discreteIntegral(xx, yy, h_sat, b_sat, dens_i, h):
     b_sat : float
         Magnetic B field at saturation
     
-    dens_i : array, 
+    dens_i : tensor, 
         A vector of dummy values for the initial density. The
         size must be n**2/2 + n/2 to populate the upper triangle,
         including the diagonal. 
 
-    h : array,
+    h : tensor,
         The applied magnetic field H_1:t={H_1, ... ,H_t}, where 
         t represents each time step. 
+        
+    states: tensor,
+        Magnetic hysteresis state as an mxnxn tensor
 
     Raises
     ------
@@ -107,26 +105,25 @@ def discreteIntegral(xx, yy, h_sat, b_sat, dens_i, h):
     """
 
     b = torch.empty(len(h))  # b is the resulting magnetic field
-    states = state(xx,yy, h_sat, h)
     dens = utils.vector_to_tril(dens_i, n)
     a = b_sat / torch.sum(dens)
     for i in range(len(h)):
         # print(dens * states[i+1])
-        b[i] = torch.sum(dens * states[i + 1])
+        b[i] = torch.sum(dens * states[i+1])
     return b * a
 
 
-h = np.append(np.linspace(-1.0, 1.0, 10), np.flipud(np.linspace(-1.0, 1.0, 10)))
-n = 100
-h_sat = 1.0
-xx, yy = utils.generate_mesh(h_sat, n)
-synthetic_mu = synthetic.gaussian_density(xx, yy)
-fig, ax = plt.subplots()
-ax.pcolor(xx, yy, synthetic_mu)
+# h = np.append(np.linspace(-1.0, 1.0, 10), np.flipud(np.linspace(-1.0, 1.0, 10)))
+# n = 100
+# h_sat = 1.0
+# xx, yy = utils.generate_mesh(h_sat, n)
+# synthetic_mu = synthetic.gaussian_density(xx, yy)
+# fig, ax = plt.subplots()
+# ax.pcolor(xx, yy, synthetic_mu)
 
-mu_vector = utils.tril_to_vector(synthetic_mu, n)
-b = discreteIntegral(xx, yy, 0.8, 2, mu_vector, h)
+# mu_vector = utils.tril_to_vector(synthetic_mu, n)
+# b = discreteIntegral(xx, yy, 0.8, 2, mu_vector, h)
 
-plt.figure()
-plt.plot(h, b, '.')
-plt.show()
+# plt.figure()
+# plt.plot(h, b, 'o')
+# plt.show()
