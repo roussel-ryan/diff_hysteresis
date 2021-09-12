@@ -31,12 +31,12 @@ def train(model, m, n_steps, lr=0.1):
 def main():
     n_grid = 50
 
-    h_max = 1.0
-    h_min = -h_max
+    h_max = 0.5
+    h_min = -0.25
     b_sat = 1.0
 
     # get synthetic training h_data
-    h, m = synthetic.generate_dataset(25, n_grid, h_max, b_sat)
+    h, m = synthetic.generate_one_sided_dataset(25, n_grid, h_max, b_sat)
 
     H = hysteresis.Hysteresis(h, h_min, h_max, b_sat, n_grid)
 
@@ -48,13 +48,20 @@ def main():
     ax.plot(h, m.detach(), 'o')
 
     # optimize
-    l = train(H, m, 200)
+    l = train(H, m, 2000)
     m_star = H.predict_magnetization().detach()
 
     ax.plot(h, m_star)
 
     fig2, ax2 = plt.subplots()
     ax2.plot(l.detach())
+
+    xx, yy = H.get_mesh()
+    dens = H.get_density_matrix().detach()
+
+    fig3, ax3 = plt.subplots()
+    c = ax3.pcolor(xx, yy, dens)
+    fig3.colorbar(c)
 
 
 if __name__ == '__main__':

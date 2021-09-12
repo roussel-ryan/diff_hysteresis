@@ -7,17 +7,20 @@ class Hysteresis(Module):
     states = None
     dtype = torch.float64
 
-    def __init__(self, data, h_min, h_max, b_sat, n):
+    def __init__(self, h_data, h_min, h_max, b_sat, n):
+        # note h_values inside class are normalized in range [0-1]
+
         super(Hysteresis, self).__init__()
-        self.h_data = data.to(self.dtype)
         self.h_min = h_min
         self.h_max = h_max
         self.b_sat = b_sat
         self.n = n
+        self.h_data = self.normalize_h(h_data.to(self.dtype))
 
-        xx, yy = utils.generate_asym_mesh(h_min, h_max, n)
-        self.xx = xx.to(self.dtype)
-        self.yy = yy.to(self.dtype)
+        # generate mesh in normalized space
+        xx, yy = utils.generate_asym_mesh(0.0, 1.0, n)
+        self._xx = xx.to(self.dtype)
+        self._yy = yy.to(self.dtype)
 
         hyst_density_vector = torch.ones(int(n**2 / 2 + n / 2),
                                               requires_grad=True,
@@ -28,17 +31,34 @@ class Hysteresis(Module):
 
         self.update_states(self.h_data)
 
+    def normalize_h(self, h):
+        return (h - self.h_min) / (self.h_max - self.h_min)
+
+    def unnormalize_h(self, h):
+        return h * (self.h_max - self.h_min) + self.h_min
+
     def get_density_vector(self):
         return torch.nn.Softplus()(self._raw_hyst_density_vector)
+
+    def get_density_matrix(self):
+        return utils.vector_to_tril(self.get_density_vector(),
+                                    self.n)
+
+    def get_mesh(self):
+        return self.unnormalize_h(self._xx), self.unnormalize_h(self._yy)
 
     def set_density_vector(self, vector):
         self._raw_hyst_density_vector = \
             torch.nn.Parameter(torch.log(
-                torch.exp(vector) - 1.0))
+                torch.exp(vector) - torch.tensor(1.0)))
 
-    def update_data(self, data):
-        self.h_data = data
-        self.update_states(data)
+    def set_data(self, h_data):
+        assert len(h_data.shape) == 1
+        self.h_data = self.normalize_h(h_data)
+        self.update_states(self.h_data)
+
+    def get_h_data(self):
+        return self.unnormalize_h(self.h_data)
 
     def update_states(self, h):
         """
@@ -69,30 +89,31 @@ class Hysteresis(Module):
             If n is negative.
         """
         # initial_hyst_state
-        hyst_state = torch.ones(self.xx.shape) * -1
+        hyst_state = torch.ones(self._xx.shape) * -1
 
         # starts off off
         hs = torch.cat((torch.ones(1) * -self.h_min,
                         h))  # H_0=-t, negative saturation limit
         states = torch.empty(
-            (len(hs), self.xx.shape[0], self.xx.shape[1]))  # list of hysteresis states
+            (len(hs), self._xx.shape[0], self._xx.shape[1]))  # list of hysteresis states
         for i in range(len(hs)):
             if hs[i] > hs[i - 1]:
-                hyst_state = torch.tensor([[hyst_state[j][k] if self.yy[j][k] >= hs[i]
+                hyst_state = torch.tensor([[hyst_state[j][k] if self._yy[j][k] >= hs[i]
                                             else 1
-                                            for k in range(len(self.yy[j]))] for j in
-                                           range(len(self.yy))])
+                                            for k in range(len(self._yy[j]))] for j in
+                                           range(len(self._yy))])
             elif hs[i] < hs[i - 1]:
-                hyst_state = torch.tensor([[hyst_state[j][k] if self.xx[j][k] <= hs[
-                    i] else -1 for k in range(len(self.yy[j]))] for j in
-                                           range(len(self.xx))])
+                hyst_state = torch.tensor([[hyst_state[j][k] if self._xx[j][k] <= hs[
+                    i] else -1 for k in range(len(self._yy[j]))] for j in
+                                           range(len(self._xx))])
             hyst_state = torch.tril(hyst_state)
             states[i] = hyst_state
         self.states = states
 
     def predict_magnetization(self, h_new=None):
         if h_new is not None:
-            h = torch.cat((self.h_data, h_new))
+            normed_h_new = self.normalize_h(h_new)
+            h = torch.cat((self.h_data, normed_h_new))
         else:
             h = self.h_data
 
