@@ -1,31 +1,29 @@
 import torch
-import numpy as np
-import numerical_hysteresis
+import hysteresis
 import utils
 
-def gaussian_density(xx, yy):
 
+def gaussian_density(xx, yy):
     x = xx.flatten()
     y = yy.flatten()
     pts = torch.hstack([ele.reshape(-1, 1) for ele in [x, y]])
 
-    m = torch.distributions.MultivariateNormal(torch.zeros(2).double(), 0.1*torch.eye(2).double())
+    m = torch.distributions.MultivariateNormal(torch.zeros(2).double(),
+                                               0.1 * torch.eye(2).double())
     dens = torch.exp(m.log_prob(pts))
-    #print(dens.shape)
+    # print(dens.shape)
 
     return dens.reshape(xx.shape[0], xx.shape[1])
 
-def generate_dataset(n_data):
-    h = np.append(np.linspace(-1.0, 1.0, n_data), np.flipud(np.linspace(-1.0, 1.0, n_data)))
-    n = 100
-    h_sat = 1.0
-    xx, yy = utils.generate_mesh(h_sat, n)
-    synthetic_mu = gaussian_density(xx, yy)
-    states = numerical_hysteresis.state(xx, yy, h_sat, h)
-    mu_vector = utils.tril_to_vector(synthetic_mu, n)
-    b = numerical_hysteresis.discreteIntegral(xx, yy, 0.8, 2, mu_vector, h,n, states)
-    
+
+def generate_dataset(n_data, n_mesh, h_sat, b_sat):
+    h_sub = torch.linspace(-1.0, 1.0, n_data)
+    h = torch.cat((h_sub, torch.flip(h_sub, [0])))
+
+    H = hysteresis.Hysteresis(h, -h_sat, h_sat, b_sat, n_mesh)
+
+    synthetic_mu = gaussian_density(H.xx, H.yy)
+    H.set_density_vector(utils.tril_to_vector(synthetic_mu, n_mesh))
+    b = H.predict_magnetization()
+
     return h, b
-
-
-
