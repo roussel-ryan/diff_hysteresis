@@ -30,11 +30,11 @@ def generate_saturation_dataset(n_data, n_mesh, h_sat, b_sat):
     return h, b
 
 
-def generate_one_sided_dataset(n_data, n_mesh, h_sat, b_sat):
-    h_sub = torch.linspace(0, h_sat/4.0, n_data)
+def generate_one_sided_dataset(n_data, n_mesh, b_sat):
+    h_sub = torch.linspace(0, 0.25, n_data)
     h = torch.cat((h_sub, torch.flip(h_sub, [0])))
 
-    H = hysteresis.Hysteresis(h, -h_sat, h_sat, b_sat, n_mesh)
+    H = hysteresis.Hysteresis(h, -1.0, 1.0, b_sat, n_mesh)
     xx, yy = H.get_mesh()
 
     synthetic_mu = gaussian_density(xx, yy)

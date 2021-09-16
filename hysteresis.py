@@ -28,7 +28,11 @@ class Hysteresis(Module):
 
         self.register_parameter('_raw_hyst_density_vector',
                                 torch.nn.Parameter(hyst_density_vector))
-
+        
+        self.register_parameter('offset', torch.nn.Parameter(torch.tensor(0.0, dtype=self.dtype)))
+        
+        self.register_parameter('scale', torch.nn.Parameter(torch.tensor(1.0, dtype=self.dtype)))
+        
         self.update_states(self.h_data)
 
     def normalize_h(self, h):
@@ -103,14 +107,16 @@ class Hysteresis(Module):
                                             for k in range(len(self._yy[j]))] for j in
                                            range(len(self._yy))])
             elif hs[i] < hs[i - 1]:
-                hyst_state = torch.tensor([[hyst_state[j][k] if self._xx[j][k] <= hs[
-                    i] else -1 for k in range(len(self._yy[j]))] for j in
+                hyst_state = torch.tensor([[hyst_state[j][k] if self._xx[j][k] <= hs[i] 
+                                            else -1 
+                                            for k in range(len(self._yy[j]))] for j in
                                            range(len(self._xx))])
             hyst_state = torch.tril(hyst_state)
             states[i] = hyst_state
         self.states = states
 
     def predict_magnetization(self, h_new=None):
+        # user inputs h_new to make predictions for the future
         if h_new is not None:
             normed_h_new = self.normalize_h(h_new)
             h = torch.cat((self.h_data, normed_h_new))
@@ -124,6 +130,7 @@ class Hysteresis(Module):
         for i in range(len(h)):
             # print(dens * states[i+1])
             b[i] = torch.sum(dens * self.states[i + 1])
-        return b * a
+        return self.scale*(b * a) + self.offset
+    
 
 
