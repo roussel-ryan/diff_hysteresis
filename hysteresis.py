@@ -129,9 +129,9 @@ class Hysteresis(Module):
         b = torch.empty(len(h))  # b is the resulting magnetic field
         hyst_density_vector = torch.nn.Softplus()(self._raw_hyst_density_vector)
         dens = utils.vector_to_tril(hyst_density_vector, self.n)
-        a = self.b_sat / torch.sum(dens)
+        # a = self.b_sat / torch.sum(dens)
         for i in range(len(h)):
             # print(dens * states[i+1])
             b[i] = torch.sum(dens * self.states[i + 1])
-        return self.scale*(b * a) + self.offset
+        return self.scale*b + self.offset
     

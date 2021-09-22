@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 def loss_fn(m, m_pred, hyst_vector):
-    return torch.sum((m - m_pred) ** 2) + torch.norm(hyst_vector)**2
+    return torch.sum((m - m_pred) ** 2) #+ torch.norm(hyst_vector)**2
 
 
 def train(model, m, n_steps, lr=0.1):

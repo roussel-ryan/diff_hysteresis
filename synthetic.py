@@ -18,8 +18,7 @@ def gaussian_density(xx, yy):
 
 def generate_saturation_dataset(n_data, n_mesh, h_sat, b_sat):
     h_sub = torch.linspace(-h_sat, h_sat, n_data)
-    h = torch.cat((h_sub, torch.flip(h_sub, [0])))
-
+    h = torch.cat((torch.cat((h_sub, torch.flip(h_sub, [0]))), torch.cat((h_sub, torch.flip(h_sub, [0]))))) # two cycles
     H = hysteresis.Hysteresis(h, -h_sat, h_sat, b_sat, n_mesh)
     xx, yy = H.get_mesh()
 
@@ -33,7 +32,6 @@ def generate_saturation_dataset(n_data, n_mesh, h_sat, b_sat):
 def generate_one_sided_dataset(n_data, n_mesh, b_sat):
     h_sub = torch.linspace(0, 0.25, n_data)
     h = torch.cat((torch.cat((h_sub, torch.flip(h_sub, [0]))), torch.cat((h_sub, torch.flip(h_sub, [0]))))) # two cycles
-
     H = hysteresis.Hysteresis(h, 0, 0.25, b_sat, n_mesh)
     xx, yy = H.get_mesh()
 
