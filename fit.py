@@ -31,12 +31,12 @@ def train(model, m, n_steps, lr=0.1):
 def main(dataset_generator):
     n_grid = 50
 
-    h_max = 0.3
-    h_min = -0.05
+    h_max = 0.25
+    h_min = 0
     b_sat = 1.0
 
     # get synthetic training h_data
-    h, m = dataset_generator(25, n_grid*2, b_sat)
+    h, m = dataset_generator(25, n_grid*4, b_sat)
 
     H = hysteresis.Hysteresis(h, h_min, h_max, b_sat, n_grid)
 
@@ -48,7 +48,7 @@ def main(dataset_generator):
     ax.plot(h, m.detach(), 'o')
 
     # optimize
-    l = train(H, m, 2000)
+    l = train(H, m, 1000, 0.1)
     m_star = H.predict_magnetization().detach()
 
     ax.plot(h, m_star)

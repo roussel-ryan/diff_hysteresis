@@ -18,7 +18,7 @@ class Hysteresis(Module):
         self.h_data = self.normalize_h(h_data.to(self.dtype))
 
         # generate mesh in normalized space
-        xx, yy = utils.generate_asym_mesh(0.0, 1.0, n)
+        xx, yy = utils.generate_asym_mesh(self.normalize_h(h_min), self.normalize_h(h_max), n)
         self._xx = xx.to(self.dtype)
         self._yy = yy.to(self.dtype)
 
@@ -63,6 +63,9 @@ class Hysteresis(Module):
 
     def get_h_data(self):
         return self.unnormalize_h(self.h_data)
+    
+    def get_states(self):
+        return self.states[-1]
 
     def update_states(self, h):
         """
@@ -132,5 +135,3 @@ class Hysteresis(Module):
             b[i] = torch.sum(dens * self.states[i + 1])
         return self.scale*(b * a) + self.offset
     
-
-
