@@ -7,7 +7,7 @@ class Hysteresis(Module):
     states = None
     dtype = torch.float64
 
-    def __init__(self, h_data, h_min, h_max, b_sat, n):
+    def __init__(self, h_data, h_min, h_max, b_sat, n, trainable=True):
         # note h_values inside class are normalized in range [0-1]
 
         super(Hysteresis, self).__init__()
@@ -22,12 +22,26 @@ class Hysteresis(Module):
         self._xx = xx.to(self.dtype)
         self._yy = yy.to(self.dtype)
 
-        hyst_density_vector = torch.ones(int(n**2 / 2 + n / 2),
-                                              requires_grad=True,
-                                              dtype=self.dtype)
+        self.vector_shape = int(n ** 2 / 2 + n / 2)
+        hyst_density_vector = torch.ones(self.vector_shape,
+                                         dtype=self.dtype)
 
-        self.register_parameter('_raw_hyst_density_vector',
-                                torch.nn.Parameter(hyst_density_vector))
+        # if we are trying to train with pytorch autograd
+        self.trainable = trainable
+        if self.trainable:
+            self.register_parameter('_raw_hyst_density_vector',
+                                    torch.nn.Parameter(hyst_density_vector))
+
+            self.register_parameter('offset',
+                                    torch.nn.Parameter(torch.zeros(1)))
+
+            self.register_parameter('scale',
+                                    torch.nn.Parameter(torch.ones(1)))
+
+        else:
+            self._raw_hyst_density_vector = hyst_density_vector
+            self.offset = torch.zeros(1)
+            self.scale = torch.ones(1)
 
         self.update_states(self.h_data)
 
@@ -37,20 +51,30 @@ class Hysteresis(Module):
     def unnormalize_h(self, h):
         return h * (self.h_max - self.h_min) + self.h_min
 
-    def get_density_vector(self):
-        return torch.nn.Softplus()(self._raw_hyst_density_vector)
+    def get_density_vector(self, raw=False):
+        if raw:
+            return self._raw_hyst_density_vector
+        else:
+            return torch.nn.Softplus()(self._raw_hyst_density_vector)
 
-    def get_density_matrix(self):
-        return utils.vector_to_tril(self.get_density_vector(),
+    def get_density_matrix(self, raw=False):
+        return utils.vector_to_tril(self.get_density_vector(raw),
                                     self.n)
 
     def get_mesh(self):
         return self.unnormalize_h(self._xx), self.unnormalize_h(self._yy)
 
     def set_density_vector(self, vector):
-        self._raw_hyst_density_vector = \
-            torch.nn.Parameter(torch.log(
-                torch.exp(vector) - torch.tensor(1.0)))
+        assert vector.shape[0] == self.vector_shape, f'{vector.shape[0]} ' \
+                                                     f'vs. {self.vector_shape} '
+        assert torch.all(vector >= 0), 'density vector must be positive'
+        if self.trainable:
+            self._raw_hyst_density_vector = \
+                torch.nn.Parameter(torch.log(
+                    torch.exp(vector) - torch.tensor(1.0)))
+        else:
+            self._raw_hyst_density_vector = torch.log(
+                    torch.exp(vector) - torch.tensor(1.0))
 
     def set_data(self, h_data):
         assert len(h_data.shape) == 1
@@ -60,7 +84,10 @@ class Hysteresis(Module):
     def get_h_data(self):
         return self.unnormalize_h(self.h_data)
 
-    def update_states(self, h):
+    def update_states(self, h: torch.Tensor):
+        self.states = self.get_states(h)
+
+    def get_states(self, h: torch.Tensor):
         """
 
         Returns magnetic hysteresis state as an mxnxn tensor, where
@@ -92,10 +119,10 @@ class Hysteresis(Module):
         hyst_state = torch.ones(self._xx.shape) * -1
 
         # starts off off
-        hs = torch.cat((torch.ones(1) * -self.h_min,
-                        h))  # H_0=-t, negative saturation limit
-        states = torch.empty(
-            (len(hs), self._xx.shape[0], self._xx.shape[1]))  # list of hysteresis states
+        hs = torch.cat((self.h_min*torch.ones(1), h))  # H_0=-t, negative
+
+        #list of hysteresis states
+        states = torch.empty((len(hs), self._xx.shape[0], self._xx.shape[1]))
         for i in range(len(hs)):
             if hs[i] > hs[i - 1]:
                 hyst_state = torch.tensor([[hyst_state[j][k] if self._yy[j][k] >= hs[i]
@@ -108,22 +135,27 @@ class Hysteresis(Module):
                                            range(len(self._xx))])
             hyst_state = torch.tril(hyst_state)
             states[i] = hyst_state
-        self.states = states
+        return states
 
-    def predict_magnetization(self, h_new=None):
+    def predict_magnetization(self, h=None, h_new=None):
+        assert not (h is not None and h_new is not None), 'cannot specify both h and ' \
+                                                          'h_new'
         if h_new is not None:
             normed_h_new = self.normalize_h(h_new)
             h = torch.cat((self.h_data, normed_h_new))
+            states = self.get_states(h)
+        elif h is not None:
+            h = self.normalize_h(h)
+            states = self.get_states(h)
         else:
             h = self.h_data
+            states = self.states
 
         b = torch.empty(len(h))  # b is the resulting magnetic field
         hyst_density_vector = torch.nn.Softplus()(self._raw_hyst_density_vector)
         dens = utils.vector_to_tril(hyst_density_vector, self.n)
-        a = self.b_sat / torch.sum(dens)
         for i in range(len(h)):
             # print(dens * states[i+1])
-            b[i] = torch.sum(dens * self.states[i + 1])
-        return b * a
-
-
+            b[i] = torch.sum(dens * states[i + 1]) / \
+                   utils.get_upper_trainagle_size(self.n)
+        return b * self.scale + self.offset

@@ -1,6 +1,7 @@
 import hysteresis
 import synthetic
 import torch
+import numpy as np
 import matplotlib.pyplot as plt
 
 
@@ -29,22 +30,25 @@ def train(model, m, n_steps, lr=0.1):
 
 # test fitting with hysteresis class
 def main():
-    n_grid = 50
+    n_grid = 100
 
-    h_max = 0.5
-    h_min = -h_max
-    b_sat = 1.0
+    h_max = 200
+    h_min = 176
+    b_sat = h_max
 
-    # get synthetic training h_data
-    h, m = synthetic.generate_one_sided_dataset(50, 25, h_max, b_sat)
+    # get real h, m
+    data = torch.tensor(np.loadtxt('data/argonne_data.txt'))
+    h = data.T[0]
+    m = data.T[1]
 
-    # scale m to be reasonable
-    m = m / max(m)
+    # normalize h, m
+    # h = (h - min(h)) / (max(h) - min(h))
+    m = (m - min(m)) / (max(m) - min(m))
 
     # remove some training data
-    n_train = int(15 * 2)
-    h_train = h[:n_train]
-    m_train = m[:n_train]
+    n_train = -1
+    h_train = h[:]
+    m_train = m[:]
 
     H = hysteresis.Hysteresis(h_train, h_min, h_max, b_sat, n_grid)
 
@@ -52,25 +56,25 @@ def main():
     m_pred = H.predict_magnetization(h[n_train:]).detach()
 
     fig, ax = plt.subplots()
-    ax.plot(h, m_pred)
+    # ax.plot(h, m_pred)
     ax.plot(h_train, m_train.detach(), 'o')
     ax.plot(h[n_train:], m.detach()[n_train:], 'ro')
 
     # optimize
-    l = train(H, m_train, 1000)
-    m_star = H.predict_magnetization(h[n_train:]).detach()
-
+    l = train(H, m_train, 1000, lr=0.5)
+    m_star = H.predict_magnetization().detach()
+    print(m_star.shape)
     ax.plot(h, m_star)
-    ax.plot()
 
     fig2, ax2 = plt.subplots()
     ax2.plot(l.detach())
 
     xx, yy = H.get_mesh()
     dens = H.get_density_matrix().detach()
+    raw_dens = H.get_density_matrix(raw=True).detach()
 
     fig3, ax3 = plt.subplots()
-    c = ax3.pcolor(xx, yy, dens)
+    c = ax3.pcolor(xx, yy, raw_dens)
     fig3.colorbar(c)
 
     fig4, ax4 = plt.subplots()
