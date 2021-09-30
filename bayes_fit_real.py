@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from pyro.infer.autoguide import AutoDiagonalNormal
 from pyro.infer import SVI, TraceEnum_ELBO, Predictive, Trace_ELBO
 import pyro
+import numpy as np
 
 import utils
 
@@ -49,18 +50,18 @@ def summary(samples):
 def main():
     n_grid = 25
 
-    h_max = 0.5
-    h_min = -h_max
-    b_sat = 1.0
+    h_max = 1
+    h_min = 0
+    b_sat = h_max
 
-    # get synthetic training h_data
-    h, m = synthetic.generate_saturation_dataset(15, n_grid, h_max, b_sat)
+    # get real h, m
+    data = torch.tensor(np.loadtxt('data/argonne_data.txt'))
+    h = data.T[0]
+    m = data.T[1]
 
-    h = h.detach().double()
-    m = m.detach()
-
-    # scale m to be reasonable
-    m = m / max(m)
+    # normalize h, m
+    h = (h - min(h)) / (max(h) - min(h))
+    m = (m - min(m)) / (max(m) - min(m))
 
     # h = h[:15]
     # m = m[:15]
@@ -77,7 +78,7 @@ def main():
 
     num_steps = 5000
     initial_lr = 0.01
-    gamma = 0.1  # final learning rate will be gamma * initial_lr
+    gamma = 1.0  # final learning rate will be gamma * initial_lr
     lrd = gamma ** (1 / num_steps)
     optim = pyro.optim.ClippedAdam({'lr': initial_lr, 'lrd': lrd})
     svi = SVI(model, guide, optim, loss=Trace_ELBO())
@@ -106,6 +107,14 @@ def main():
                     mu['95%'],
                     alpha=0.25)
 
+    fig3, ax3 = plt.subplots()
+    ax3.plot(m.detach(), 'o')
+    ax3.plot(mu['mean'].detach())
+    ax3.fill_between(range(len(h)),
+                     mu['5%'],
+                     mu['95%'],
+                     alpha=0.25)
+
     # fitted density
     loc = pyro.param('AutoDiagonalNormal.loc')[:-2].double()
     scale = pyro.param('AutoDiagonalNormal.scale')[:-2].double()
@@ -121,9 +130,14 @@ def main():
 
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
     ax.plot_surface(xx, yy, den.detach().numpy(),
-                       linewidth=0)
+                    linewidth=0)
     ax.plot_surface(xx, yy, upper.detach().numpy())
     ax.plot_surface(xx, yy, lower.detach().numpy())
+
+    fig, ax = plt.subplots()
+    c = ax.pcolor(xx, yy, den.detach().numpy())
+    fig.colorbar(c)
+
 
 if __name__ == '__main__':
     main()
