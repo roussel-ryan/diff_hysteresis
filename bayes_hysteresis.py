@@ -20,7 +20,7 @@ class BayesianHysteresis(PyroModule):
         vector_length = utils.get_upper_trainagle_size(n)
 
         # represent the hysterion density inside [0,1] with a beta distribution
-        self.density = PyroSample(dist.Normal(0.0, 10.).expand([
+        self.density = PyroSample(dist.Normal(0.0, 1.).expand([
             vector_length]).to_event(1))
 
         # represent the scale and offset with Normal distributions - priors assume

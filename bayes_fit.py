@@ -6,32 +6,9 @@ import matplotlib.pyplot as plt
 from pyro.infer.autoguide import AutoDiagonalNormal
 from pyro.infer import SVI, TraceEnum_ELBO, Predictive, Trace_ELBO
 import pyro
-
+from bayesian_utils import train, predict
 import utils
-
-
-def loss_fn(m, m_pred):
-    return torch.sum((m - m_pred) ** 2)
-
-
-def train(model, m, n_steps, lr=0.1):
-    optimizer = torch.optim.Adam(model.parameters(),
-                                 lr=lr)
-
-    loss_track = []
-    for i in range(n_steps):
-        optimizer.zero_grad()
-        output = model.predict_magnetization()
-        loss = loss_fn(m, output)
-        loss.backward(retain_graph=True)
-
-        loss_track += [loss]
-        optimizer.step()
-        if i % 100 == 0:
-            print(i)
-
-    return torch.tensor(loss_track)
-
+from plotting import plot_bayes_predicition
 
 def summary(samples):
     site_stats = {}
@@ -75,36 +52,16 @@ def main():
     model = bayes_hysteresis.BayesianHysteresis(model, n_grid)
     guide = AutoDiagonalNormal(model)
 
-    num_steps = 5000
-    initial_lr = 0.01
-    gamma = 0.1  # final learning rate will be gamma * initial_lr
-    lrd = gamma ** (1 / num_steps)
-    optim = pyro.optim.ClippedAdam({'lr': initial_lr, 'lrd': lrd})
-    svi = SVI(model, guide, optim, loss=Trace_ELBO())
+    train(h, m, model, guide, 5000, 0.01)
+    summary = predict(h, model, guide)
 
-    pyro.clear_param_store()
-    for j in range(num_steps):
-        # calculate the loss and take a gradient step
-        loss = svi.step(h, m)
-        if j % 100 == 0:
-            print("[iteration %04d] loss: %.4f" % (j + 1, loss))
+    loc = pyro.param('AutoDiagonalNormal.loc')[:-2].double()
+    den = utils.vector_to_tril(torch.nn.Softplus()(loc),
+                               n_grid)
 
-    predictive = Predictive(model,
-                            guide=guide,
-                            num_samples=500,
-                            return_sites=['_RETURN', 'obs'])
-
-    samples = predictive(h)
-    pred_summary = summary(samples)
-    mu = pred_summary['obs']
-
-    fig, ax = plt.subplots()
-    ax.plot(h, m.detach(), 'o')
-    ax.plot(h, mu['mean'].detach())
-    ax.fill_between(h,
-                    mu['5%'],
-                    mu['95%'],
-                    alpha=0.25)
+    y = summary['obs']
+    fig, ax = plot_bayes_predicition(summary, m)
+    fig.savefig('figures/bayes_prediction.svg')
 
     # fitted density
     loc = pyro.param('AutoDiagonalNormal.loc')[:-2].double()
@@ -119,11 +76,12 @@ def main():
     xx = xx.numpy()
     yy = yy.numpy()
 
-    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-    ax.plot_surface(xx, yy, den.detach().numpy(),
-                       linewidth=0)
-    ax.plot_surface(xx, yy, upper.detach().numpy())
-    ax.plot_surface(xx, yy, lower.detach().numpy())
+    fig, ax = plt.subplots()
+    c = ax.pcolor(xx, yy, den.detach().numpy())
+    fig.colorbar(c, label='Hysterion Density (arb. units)')
+    ax.set_xlabel(r'$\beta$ (T)')
+    ax.set_ylabel(r'$\alpha$ (T)')
+    fig.savefig('figures/bayes_mean_density.png', dpi=300)
 
 if __name__ == '__main__':
     main()

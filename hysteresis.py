@@ -60,7 +60,7 @@ class Hysteresis(Module):
 
     def get_density_matrix(self, raw=False):
         return utils.vector_to_tril(self.get_density_vector(raw),
-                                    self.n)
+                                    self._n)
 
     def get_mesh(self):
         return self.unnormalize_h(self._xx), self.unnormalize_h(self._yy)
@@ -118,7 +118,7 @@ class Hysteresis(Module):
         """
         print('calculating states')
         # starts off off
-        hs = torch.cat((self.h_min * torch.ones(1), h))  # H_0=-t, negative
+        hs = torch.cat((torch.zeros(1), h))  # H_0=-t, negative
 
         # list of hysteresis states with inital state set
         states = torch.empty((len(hs), self._xx.shape[0], self._xx.shape[1]))
@@ -166,7 +166,6 @@ class Hysteresis(Module):
                 h_norm = self.normalize_h(h)
                 states = self.get_states(h_norm)
 
-
         else:
             h = self.h_data
             states = self.states
@@ -185,4 +184,4 @@ class Hysteresis(Module):
         for i in range(len(h)):
             # print(dens * states[i+1])
             m[i] = torch.sum(dens * states[i + 1]) / self._vector_shape
-        return m + o
+        return s*m + o
