@@ -6,48 +6,16 @@ import matplotlib.pyplot as plt
 from pyro.infer.autoguide import AutoDiagonalNormal
 from pyro.infer import SVI, TraceEnum_ELBO, Predictive, Trace_ELBO
 import pyro
+import data_imports
 from bayesian_utils import train, predict
 import utils
 from plotting import plot_bayes_predicition
-
-def summary(samples):
-    site_stats = {}
-    for k, v in samples.items():
-        site_stats[k] = {
-            "mean": torch.mean(v, 0),
-            "std": torch.std(v, 0),
-            "5%": v.kthvalue(int(len(v) * 0.05), dim=0)[0],
-            "95%": v.kthvalue(int(len(v) * 0.95), dim=0)[0],
-        }
-    return site_stats
 
 
 # test fitting with hysteresis class
 def main():
     n_grid = 25
-
-    h_max = 0.5
-    h_min = -h_max
-    b_sat = 1.0
-
-    # get synthetic training h_data
-    h, m = synthetic.generate_saturation_dataset(15, n_grid, h_max, b_sat)
-
-    h = h.detach().double()
-    m = m.detach()
-
-    # scale m to be reasonable
-    m = m / max(m)
-
-    # h = h[:15]
-    # m = m[:15]
-
-    model = hysteresis.Hysteresis(h,
-                                  h_min,
-                                  h_max,
-                                  b_sat,
-                                  n_grid,
-                                  trainable=False)
+    h, m, model = data_imports.get_synthetic(n_grid)
 
     model = bayes_hysteresis.BayesianHysteresis(model, n_grid)
     guide = AutoDiagonalNormal(model)

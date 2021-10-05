@@ -5,55 +5,32 @@ import hysteresis
 import synthetic
 import torch
 import matplotlib.pyplot as plt
-from bayes_hysteresis_correlated import calculate_distances, \
-    CorrelatedBayesianHysteresis
+from bayes_hysteresis_correlated import CorrelatedBayesianHysteresis
 from pyro.infer.autoguide import AutoMultivariateNormal
 from pyro.infer import SVI, TraceEnum_ELBO, Predictive, Trace_ELBO
 import pyro
 from bayesian_utils import train, predict
 import utils
+from data_imports import get_synthetic
+
 
 # test fitting with hysteresis class
 def main():
     n_grid = 25
+    h, m, hyst_model = get_synthetic(n_grid)
 
-    h_max = 1.0
-    h_min = 0.0
-    b_sat = 1.0
-
-    # get real h, m
-    data = torch.tensor(np.loadtxt('data/argonne_data.txt'))
-    h = data.T[0]
-    m = data.T[1]
-
-    # normalize h, m
-    h = (h - min(h)) / (max(h) - min(h))
-    m = (m - min(m)) / (max(m) - min(m))
-
-    h = h.detach().double()
-    m = m.detach()
-
-    # scale m to be reasonable
-    m = m / max(m)
-
-    # h = h[:15]
-    # m = m[:15]
-
-    hyst_model = hysteresis.Hysteresis(h,
-                                       h_min,
-                                       h_max,
-                                       b_sat,
-                                       n_grid,
-                                       trainable=False)
     xx, yy = hyst_model.get_mesh()
     model = CorrelatedBayesianHysteresis(hyst_model,
-                                         n_grid, 0.1)
+                                         n_grid,
+                                         0.1,
+                                         use_prior=True)
     guide = AutoMultivariateNormal(model)
 
-    train(h, m, model, guide, 10000, 0.001)
+    train(h, m, model, guide, 20000, 0.001)
     summary = predict(h, model, guide)
 
     loc = pyro.param('AutoMultivariateNormal.loc')[:-2].double()
+    raw_den = utils.vector_to_tril(loc, n_grid)
     den = utils.vector_to_tril(torch.nn.Softplus()(loc),
                                n_grid)
 
@@ -72,6 +49,11 @@ def main():
     fig, ax = plt.subplots()
     c = ax.pcolor(xx, yy, den.detach())
     fig.colorbar(c)
+
+    fig, ax = plt.subplots()
+    c = ax.pcolor(xx, yy, raw_den.detach())
+    fig.colorbar(c)
+
 
 if __name__ == '__main__':
     main()

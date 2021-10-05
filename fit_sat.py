@@ -52,7 +52,7 @@ def main():
     m_pred = H.predict_magnetization(h[n_train:]).detach()
 
     fig, ax = plt.subplots()
-    ax.plot(h, m_pred)
+    ax.plot(h_train, m_pred)
     ax.plot(h_train, m_train.detach(), 'o')
     ax.plot(h[n_train:], m.detach()[n_train:], 'ro')
 

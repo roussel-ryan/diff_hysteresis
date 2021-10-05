@@ -45,7 +45,7 @@ def vector_to_tril(vector, n):
     """
     assert vector.shape[0] == int(n ** 2 / 2 + n / 2), f'{vector.shape[0]} vs. {int(n ** 2 / 2 + n / 2)}'
     # zeroed lower triangle
-    dens = torch.zeros((n, n)).double()
+    dens = torch.zeros((n, n)).to(vector)
     idx = torch.tril_indices(row=n, col=n, offset=0)
     dens[idx[0], idx[1]] = vector
     return dens

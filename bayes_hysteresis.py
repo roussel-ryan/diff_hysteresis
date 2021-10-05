@@ -1,14 +1,11 @@
-import matplotlib.pyplot as plt
-import numpy as np
-import torch
-import utils
-
 import pyro
+import pyro.distributions as dist
 import pyro.infer
 import pyro.optim
-import pyro.distributions as dist
+import torch
 from pyro.nn import PyroModule, PyroSample
-import hysteresis
+
+import utils
 
 
 class BayesianHysteresis(PyroModule):
@@ -19,9 +16,9 @@ class BayesianHysteresis(PyroModule):
         # vector length
         vector_length = utils.get_upper_trainagle_size(n)
 
-        # represent the hysterion density inside [0,1] with a beta distribution
-        self.density = PyroSample(dist.Normal(0.0, 1.).expand([
-            vector_length]).to_event(1))
+        # represent the hysterion density
+        self.density = PyroSample(dist.Normal(0.0, 1.).expand(torch.Size([
+            vector_length])).to_event(1))
 
         # represent the scale and offset with Normal distributions - priors assume
         # normalized output
@@ -30,7 +27,7 @@ class BayesianHysteresis(PyroModule):
 
     def forward(self, x, y=None):
         # set hysteresis model parameters to do calculation
-        raw_vector = self.density.double().flatten()
+        raw_vector = self.density.to(self.hysteresis_model.h_data)
         scale = torch.nn.Softplus()(self.scale)
 
         # do prediction

@@ -1,66 +1,73 @@
+import matplotlib.pyplot as plt
 import pyro
 import pyro.distributions as dist
 import pyro.infer
 import pyro.optim
 import torch
 from pyro.nn import PyroModule, PyroSample
-
+from bayes_hysteresis import BayesianHysteresis
 import utils
 
 
-def calculate_distances(model):
-    x = utils.tril_to_vector(model._xx, model._n)
-    y = utils.tril_to_vector(model._yy, model._n)
+def calculate_cov(model, sigma):
+    xx, yy = model.get_mesh()
+    x = utils.tril_to_vector(xx, model.n)
+    y = utils.tril_to_vector(yy, model.n)
 
-    #create matrix of distances between points in vector
+    # create matrix of distances between points in vector
     n = len(x)
-    distances = torch.empty((n, n))
+    distances = torch.empty((n, n)).to(model.h_data)
 
     for ii in range(n):
         for jj in range(n):
-            distances[ii][jj] = torch.sqrt((x[ii] - x[jj])**2 + (y[ii] - y[jj])**2)
+            distances[ii][jj] = torch.sqrt((x[ii] - x[jj]) ** 2 + (y[ii] - y[jj]) ** 2)
 
-    return distances
+    # calculate correlation matrix using squared exponential
+    corr = torch.exp(-distances ** 2 / (2.0 * sigma ** 2)) \
+           + torch.eye(model.vector_shape) * 1e-2
+
+    return corr
 
 
-class CorrelatedBayesianHysteresis(PyroModule):
-    def __init__(self, model, n, sigma):
-        super(CorrelatedBayesianHysteresis, self).__init__()
+def calculate_prior_mean(model):
+    # use distance from x=y to get prior mean
+    xx, yy = model.get_mesh()
+    x = utils.tril_to_vector(xx, model.n)
+    y = utils.tril_to_vector(yy, model.n)
 
-        self.hysteresis_model = model
-        # vector length
-        vector_length = utils.get_upper_trainagle_size(n)
+    d = torch.abs(x - y) / 2 ** 0.5
 
-        # calculate distances between locations
-        distances = calculate_distances(self.hysteresis_model)
+    # construct mean
+    mean = torch.exp(-d / 0.05)
 
-        # calculate correlation matrix using squared exponential
-        corr = torch.exp(-distances**2 / (2.0*sigma**2)) \
-               + torch.eye(vector_length)*1e-2
+    # undo softplus transform
+    mean = torch.log(torch.exp(mean) - 1.0)
+    #plt.pcolor(xx, yy, utils.vector_to_tril(mean, model.n))
+    #plt.colorbar()
+
+    return mean
+
+
+class CorrelatedBayesianHysteresis(BayesianHysteresis):
+    def __init__(self, model, n, sigma, use_prior=False):
+        super(CorrelatedBayesianHysteresis, self).__init__(model, n)
+
+        # calculate mean
+        if use_prior:
+            prior_mean = calculate_prior_mean(model)
+        else:
+            prior_mean = torch.zeros(self.hysteresis_model.vector_shape)
+
+        # calculate covariance matrix
+        corr = calculate_cov(self.hysteresis_model, sigma)
 
         # represent the hysterion density as a correlated multivariate gaussian
         self.density = PyroSample(
-            dist.MultivariateNormal(torch.ones(vector_length),
-                                    covariance_matrix=10.0*corr))
+            dist.MultivariateNormal(
+                prior_mean,
+                covariance_matrix=corr))
 
         # represent the scale and offset with Normal distributions - priors assume
         # normalized output
         self.scale = PyroSample(dist.Normal(1.0, 1.0))
         self.offset = PyroSample(dist.Normal(0.0, 1.0))
-
-    def forward(self, x, y=None):
-        # set hysteresis model parameters to do calculation
-        raw_vector = self.density.double().flatten()
-        scale = torch.nn.Softplus()(self.scale)
-
-        # do prediction
-        mean = \
-            self.hysteresis_model.predict_magnetization(h=x,
-                                                        raw_dens_vector=raw_vector,
-                                                        scale=scale,
-                                                        offset=self.offset)
-
-        # condition on observations
-        with pyro.plate('data', x.shape[0]):
-            obs = pyro.sample('obs', dist.Normal(mean, 0.01), obs=y)
-        return mean
