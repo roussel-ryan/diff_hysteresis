@@ -1,3 +1,5 @@
 
-__pycache__/hysteresis.cpython-39.pyc
+__pycache__/
 *.pyc
+.idea/
+.ipynb_checkpoints/
