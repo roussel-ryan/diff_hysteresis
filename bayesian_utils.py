@@ -32,8 +32,8 @@ def predict(h, model, guide):
     predictive = Predictive(model,
                             guide=guide,
                             num_samples=500,
-                            return_sites=['_RETURN', 'obs'])
+                            return_sites=['_RETURN', 'obs', 'density'])
 
     samples = predictive(h)
     pred_summary = summary(samples)
-    return pred_summary
+    return pred_summary, samples

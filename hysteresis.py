@@ -168,6 +168,7 @@ class Hysteresis(Module):
                 self.old_h = h
                 h_norm = self.normalize_h(h)
                 states = self.get_states(h_norm)
+                self.states = states
 
         else:
             h = self.h_data

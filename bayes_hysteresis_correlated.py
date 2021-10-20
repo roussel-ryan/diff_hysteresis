@@ -42,8 +42,8 @@ def calculate_prior_mean(model):
 
     # undo softplus transform
     mean = torch.log(torch.exp(mean) - 1.0)
-    #plt.pcolor(xx, yy, utils.vector_to_tril(mean, model.n))
-    #plt.colorbar()
+    # plt.pcolor(xx, yy, utils.vector_to_tril(mean, model.n))
+    # plt.colorbar()
 
     return mean
 
@@ -52,22 +52,27 @@ class CorrelatedBayesianHysteresis(BayesianHysteresis):
     def __init__(self, model, n, sigma, use_prior=False):
         super(CorrelatedBayesianHysteresis, self).__init__(model, n)
 
-        # calculate mean
-        if use_prior:
-            prior_mean = calculate_prior_mean(model)
-        else:
-            prior_mean = torch.zeros(self.hysteresis_model.vector_shape)
+        self.sigma = sigma
+        self.use_prior = use_prior
 
-        # calculate covariance matrix
-        corr = calculate_cov(self.hysteresis_model, sigma)
-
-        # represent the hysterion density as a correlated multivariate gaussian
-        self.density = PyroSample(
-            dist.MultivariateNormal(
-                prior_mean,
-                covariance_matrix=corr))
+        self.density = PyroSample(self.get_prior_density_distribution())
 
         # represent the scale and offset with Normal distributions - priors assume
         # normalized output
         self.scale = PyroSample(dist.Normal(1.0, 1.0))
         self.offset = PyroSample(dist.Normal(0.0, 1.0))
+
+    def get_prior_density_distribution(self):
+        # calculate mean
+        if self.use_prior:
+            prior_mean = calculate_prior_mean(self.hysteresis_model)
+        else:
+            prior_mean = torch.zeros(self.hysteresis_model.vector_shape)
+
+        # calculate covariance matrix
+        corr = calculate_cov(self.hysteresis_model, self.sigma)
+
+        # represent the hysterion density as a correlated multivariate gaussian
+        return dist.MultivariateNormal(
+            prior_mean,
+            covariance_matrix=corr)
