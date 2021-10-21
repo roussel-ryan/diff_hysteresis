@@ -15,18 +15,21 @@ def summary(samples):
     return site_stats
 
 
-def train(h, m, model, guide, num_steps, initial_lr=0.001, gamma=0.1):
+def train_bayes(h, m, model, guide, num_steps, initial_lr=0.001, gamma=0.1):
     lrd = gamma ** (1 / num_steps)
     optim = pyro.optim.ClippedAdam({'lr': initial_lr, 'lrd': lrd})
     svi = SVI(model, guide, optim, loss=Trace_ELBO())
 
     pyro.clear_param_store()
+    loss_trace = []
     for j in range(num_steps):
         # calculate the loss and take a gradient step
         loss = svi.step(h, m)
+        loss_trace += [loss]
         if j % 100 == 0:
             print("[iteration %04d] loss: %.4f" % (j + 1, loss))
 
+    return loss_trace
 
 def predict(h, model, guide):
     predictive = Predictive(model,

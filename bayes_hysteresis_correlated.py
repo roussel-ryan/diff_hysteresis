@@ -10,10 +10,9 @@ import utils
 
 
 def calculate_cov(model, sigma):
-    xx, yy = model.get_mesh()
-    x = utils.tril_to_vector(xx, model.n)
-    y = utils.tril_to_vector(yy, model.n)
-
+    mesh_points = model.mesh_points
+    x = mesh_points[:, 0]
+    y = mesh_points[:, 1]
     # create matrix of distances between points in vector
     n = len(x)
     distances = torch.empty((n, n)).to(model.h_data)
@@ -31,9 +30,9 @@ def calculate_cov(model, sigma):
 
 def calculate_prior_mean(model):
     # use distance from x=y to get prior mean
-    xx, yy = model.get_mesh()
-    x = utils.tril_to_vector(xx, model.n)
-    y = utils.tril_to_vector(yy, model.n)
+    mesh_points = model.mesh_points
+    x = mesh_points[:, 0]
+    y = mesh_points[:, 1]
 
     d = torch.abs(x - y) / 2 ** 0.5
 
@@ -67,7 +66,8 @@ class CorrelatedBayesianHysteresis(BayesianHysteresis):
         if self.use_prior:
             prior_mean = calculate_prior_mean(self.hysteresis_model)
         else:
-            prior_mean = torch.zeros(self.hysteresis_model.vector_shape)
+            prior_mean = torch.zeros(self.hysteresis_model.vector_shape).to(
+                self.hysteresis_model.h_data)
 
         # calculate covariance matrix
         corr = calculate_cov(self.hysteresis_model, self.sigma)

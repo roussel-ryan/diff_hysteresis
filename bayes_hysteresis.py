@@ -65,6 +65,6 @@ class BayesianHysteresis(PyroModule):
                                                             raw_dens_vector=raw_vector,
                                                             scale=scale,
                                                             offset=offset)
-            results[i] = dist.Normal(mean, 0.01).sample()
+            results[i] = dist.Normal(mean, 0.001).sample()
         return results
 

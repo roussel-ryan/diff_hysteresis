@@ -1,4 +1,4 @@
-import hysteresis
+import hysteresis_triangle
 import synthetic
 import torch
 import matplotlib.pyplot as plt
@@ -31,52 +31,66 @@ def train(model, m, n_steps, lr=0.1):
 def main():
     n_grid = 50
 
-    h_max = 0.5
+    h_max = 1.0
     h_min = -h_max
     b_sat = 1.0
 
     # get synthetic training h_data
-    h, m = synthetic.generate_one_sided_dataset(50, 25, h_max, b_sat)
+    h, m = synthetic.generate_saturation_dataset(50, 25, h_max, b_sat)
 
     # scale m to be reasonable
     m = m / max(m)
 
     # remove some training data
-    n_train = int(15 * 2)
+    n_train = -1
     h_train = h[:n_train]
     m_train = m[:n_train]
 
-    H = hysteresis.Hysteresis(h_train, h_min, h_max, b_sat, n_grid)
-
+    size = 0.5
+    H = hysteresis_triangle.HysteresisTriangle(h_train, size)
 
     # dummy predict
-    m_pred = H.predict_magnetization(h[n_train:]).detach()
+    m_pred = H.predict_magnetization().detach()
 
+    #fig3, ax3 = plt.subplots()
+    #c = ax3.tripcolor(H.mesh_points[:, 0],
+    #                   H.mesh_points[:, 1],
+    #                  H.states[80])
+    #fig3.colorbar(c)
+    #print(H.states[60])
+    #
     fig, ax = plt.subplots()
     ax.plot(h_train, m_pred)
     ax.plot(h_train, m_train.detach(), 'o')
-    ax.plot(h[n_train:], m.detach()[n_train:], 'ro')
+    ax.set_ylim(-1.1,1.1)
 
     # optimize
-    l = train(H, m_train, 1000)
-    m_star = H.predict_magnetization(h[n_train:]).detach()
-
-    ax.plot(h, m_star)
-    ax.plot()
-
+    l = train(H, m_train, 5000, lr=0.01)
+    m_star = H.predict_magnetization().detach()
+    ax.plot(h_train, m_star)
+    # # ax.plot()
+    # #
     fig2, ax2 = plt.subplots()
     ax2.plot(l.detach())
-
-    xx, yy = H.get_mesh()
-    dens = H.get_density_matrix().detach()
-
+    # #
+    # # xx, yy = H.get_mesh()
+    # # dens = H.get_density_matrix().detach()
+    # #
     fig3, ax3 = plt.subplots()
-    c = ax3.pcolor(xx, yy, dens)
+    x = H.mesh_points[:, 0]
+    y = H.mesh_points[:, 1]
+    den = H.get_density_vector().detach() / ((0.2 * (torch.abs(x - y)) + 0.05) * size)
+    c = ax3.tripcolor(x,
+                      y,
+                      den)
     fig3.colorbar(c)
 
-    fig4, ax4 = plt.subplots()
-    c = ax4.pcolor(xx, yy, H.states[-1])
-    fig4.colorbar(c)
+    print(torch.max(den))
+
+    #
+    # fig4, ax4 = plt.subplots()
+    # c = ax4.pcolor(xx, yy, H.states[-1])
+    # fig4.colorbar(c)
 
 
 if __name__ == '__main__':

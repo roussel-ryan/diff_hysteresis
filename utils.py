@@ -19,6 +19,28 @@ def gen_xi(n):
     return x
 
 
+def loss_fn(m, m_pred):
+    return torch.sum((m - m_pred) ** 2)
+
+
+def train(model, m, n_steps, lr=0.1):
+    optimizer = torch.optim.Adam(model.parameters(),
+                                 lr=lr)
+
+    loss_track = []
+    for i in range(n_steps):
+        optimizer.zero_grad()
+        output = model.predict_magnetization()
+        loss = loss_fn(m, output)
+        loss.backward(retain_graph=True)
+
+        loss_track += [loss]
+        optimizer.step()
+        if i % 100 == 0:
+            print(i)
+
+    return torch.tensor(loss_track)
+
 def vector_to_tril(vector, n):
     """Returns a simulated hysterion density as an nxn tensor.
     Density means the number of hysterions given (alpha, beta).
