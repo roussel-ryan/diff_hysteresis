@@ -5,13 +5,25 @@ from typing import Dict, Callable
 from .meshing import create_triangle_mesh, default_mesh_size
 
 
+def switch(x, s, T=1e-5):
+    """
+    switch function  to change between negative and positive states
+    For x > s the function rapidly takes a value of 1.0
+    for x < s the function rapidly takes a value of -1.0
+
+    Temperature parameter (T) determines how quickly this happens, set T << 1 to get
+    heavyside behavior.
+    """
+    return 2.0 / (1.0 + torch.exp(-(x - s) / T)) - 1
+
+
 class TorchHysteresis(Module):
     states = None
     _old_h = None
     _old_states = None
 
     def __init__(self,
-                 h_train: Tensor,
+                 h_train: Tensor = None,
                  mesh_scale: float = 1.0,
                  trainable: bool = True,
                  tkwargs: Dict = None,
@@ -46,16 +58,15 @@ class TorchHysteresis(Module):
 
         self.trainable = trainable
 
-        # normalize training data
-        self.h_min = torch.min(h_train)
-        self.h_max = torch.max(h_train)
-        self.h_train = self.normalize_h(h_train.to(**self.tkwargs))
-
         # generate mesh grid on 2D normalized domain [[0,1],[0,1]]
         self.mesh_scale = mesh_scale
-        self.mesh_points = torch.tensor(create_triangle_mesh(mesh_scale,
-                                                             mesh_density_function),
-                                        **self.tkwargs)
+        self.mesh_points = torch.tensor(
+            create_triangle_mesh(
+                mesh_scale,
+                mesh_density_function
+            ),
+            **self.tkwargs
+        )
 
         # generate hysterion density vector, offset and scale parameters
         hyst_density = torch.ones(self.mesh_points.shape[0], **self.tkwargs)
@@ -69,15 +80,32 @@ class TorchHysteresis(Module):
             self.register_parameter('scale', Parameter(scale))
 
         else:
-            self._raw_hyst_density = hyst_density
-            self.offset = offset
-            self.scale = scale
+            self.register_buffer('_raw_hyst_density', Parameter(hyst_density))
+            self.register_buffer('offset', Parameter(offset))
+            self.register_buffer('scale', Parameter(scale))
 
-        self.update_states(self.h_train)
+        if h_train is not None:
+            # normalize training data
+            self.h_min = torch.min(h_train)
+            self.h_max = torch.max(h_train)
+            self.h_train = self.normalize_h(h_train.to(**self.tkwargs))
+
+            self.update_states(self.h_train)
+        else:
+            self.h_min = 0.0
+            self.h_max = 1.0
+            self.h_train = None
 
     @property
     def hysterion_density(self):
         return torch.nn.Softplus()(self._raw_hyst_density)
+
+    @hysterion_density.setter
+    def hysterion_density(self, value):
+        self._raw_hyst_density = Parameter(torch.log(torch.exp(value) - 1).to(
+            **self.tkwargs))
+        if not self.trainable:
+            self._raw_hyst_density.requires_grad = False
 
     def get_mesh_size(self, x, y):
         return default_mesh_size(x, y, self.mesh_scale)
@@ -122,14 +150,15 @@ class TorchHysteresis(Module):
         ValueError
             If n is negative.
         """
+
+        n_mesh_points = self.mesh_points.shape[0]
+
         # note running into machine precision issues when normalizing
-        if not (torch.all(h <= 1.0 + 1e-7) and torch.all(h >= 0 - 1e-7)):
+        if not (torch.all(h <= 1.0 + 1e-7) and torch.all(h >= 0.0 - 1e-7)):
             raise ValueError('model not valid for applied fields outside unit domain')
 
         # starts off off
         hs = torch.cat((torch.zeros(1, **self.tkwargs), h))  # H_0=-t, negative
-
-        n_mesh_points = self.mesh_points.shape[0]
 
         # list of hysteresis states with initial state set
         states = torch.empty((len(hs), n_mesh_points), **self.tkwargs)
@@ -149,7 +178,10 @@ class TorchHysteresis(Module):
             if not calculate_states:
                 # if the two values of h do NOT match then we need to recalc the rest
                 # of the states
-                if not torch.isclose(hs[i], self._old_h[i]):
+                try:
+                    if not torch.isclose(hs[i], self._old_h[i]):
+                        calculate_states = True
+                except IndexError:
                     calculate_states = True
 
             # if we need to calculate the state do so - if not grab the old state
@@ -181,6 +213,28 @@ class TorchHysteresis(Module):
 
         return states, n_calcs
 
+    def get_negative_saturation(self,
+                                density_vector: Tensor = None,
+                                scale: Tensor = None,
+                                offset: Tensor = None
+                                ):
+        """ get the nagetive stautration magnetization given a set of parameters
+        internal or specified via argument"""
+        # get the density vector from the raw version
+        if density_vector is None:
+            hyst_density_vector = torch.nn.Softplus()(self._raw_hyst_density)
+        else:
+            hyst_density_vector = torch.nn.Softplus()(density_vector)
+
+        s = scale if scale is not None else self.scale
+        o = offset if offset is not None else self.offset
+
+        neg_sat_state = torch.ones((1, self.mesh_points.shape[0]), **self.tkwargs) * \
+                        -1.0
+        m = torch.sum(hyst_density_vector * neg_sat_state, dim=-1) \
+            / len(hyst_density_vector)
+        return s * m + o
+
     def predict_magnetization(self,
                               h: Tensor = None,
                               h_new: Tensor = None,
@@ -195,12 +249,13 @@ class TorchHysteresis(Module):
         h : torch.Tensor, optional
             Sequence of applied fields that the model will calculate the
             magnetization at. If None or h == h_train then hysteresis states are not
-            recalculated. Cannot be specified at the same time as `h_new`.
+            recalculated. Cannot be specified at the same time as `h_new`. Fields
+            should not be normalized.
 
         h_new : torch.Tensor, optional
             Sequence of applied fields that will be appended to the training data to
             reduce recalculation of hysterion states. Cannot be specified at the same
-            time as `h`.
+            time as `h`. Fields should not be normalized.
 
         density_vector : torch.Tensor, optional
             Fixed density_vector to be used in magnetization prediction. By default
@@ -226,17 +281,6 @@ class TorchHysteresis(Module):
 
         assert not (h is not None and h_new is not None), 'cannot specify both h and ' \
                                                           'h_new'
-        # get the states based on h
-        if h_new is not None:
-            normed_h_new = self.normalize_h(h_new)
-            h = torch.cat((self.h_data, normed_h_new))
-            states, _ = self.get_states(h)
-        elif h is not None:
-            normed_h = self.normalize_h(h)
-            states, _ = self.get_states(normed_h)
-
-        else:
-            states = self.states
 
         # get the density vector from the raw version
         if density_vector is None:
@@ -247,7 +291,25 @@ class TorchHysteresis(Module):
         s = scale if scale is not None else self.scale
         o = offset if offset is not None else self.offset
 
+        # get the states based on h
+        if h_new is not None:
+            normed_h_new = self.normalize_h(h_new)
+            if self.h_train is None:
+                normed_h = normed_h_new
+            else:
+                normed_h = torch.cat((self.h_train, normed_h_new))
+            states, _ = self.get_states(normed_h)
+        elif h is not None:
+            normed_h = self.normalize_h(h)
+            states, _ = self.get_states(normed_h)
+
+        else:
+            # if no states have been calculated
+            if self.states is not None:
+                states = self.states
+            else:
+                return self.get_negative_saturation(density_vector, scale, offset)[0]
+
         m = torch.sum(hyst_density_vector * states[1:], dim=-1) \
             / len(hyst_density_vector)
         return s * m + o
-
