@@ -30,11 +30,9 @@ class LinearizedHysteresis(TorchHysteresis):
         self.transformer = LinearizedTransform(h_train, m_train)
         self.h_train = self.transformer.transform_h(h_train)
 
-        super(LinearizedHysteresis, self).__init__(h_train,
-                                                   mesh_scale,
-                                                   trainable,
-                                                   tkwargs,
-                                                   mesh_density_function)
+        super(LinearizedHysteresis, self).__init__(h_train, mesh_scale,
+                                                   trainable=trainable, tkwargs=tkwargs,
+                                                   mesh_density_function=mesh_density_function)
 
         l_offset = torch.zeros(1, **self.tkwargs)
         l_slope = torch.zeros(1, **self.tkwargs)

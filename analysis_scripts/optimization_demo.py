@@ -15,7 +15,6 @@ def density_function(mesh_pts):
 
 def optimize(accelerator_model, initial_beam_matrix):
     optimizer = torch.optim.Adam(accelerator_model.parameters(), lr=0.1)
-    print(HA.q1.fantasy_H.data)
 
     iterations = 2
     for i in range(iterations):
@@ -32,7 +31,6 @@ def optimize(accelerator_model, initial_beam_matrix):
 
         # take step with optimizer to determine next point
         optimizer.step()
-
 
 
 #hysteresis model

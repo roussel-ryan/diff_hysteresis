@@ -3,18 +3,7 @@ from torch.nn import Module, Parameter
 from torch import Tensor
 from typing import Dict, Callable
 from .meshing import create_triangle_mesh, default_mesh_size
-
-
-def switch(x, s, T=1e-5):
-    """
-    switch function  to change between negative and positive states
-    For x > s the function rapidly takes a value of 1.0
-    for x < s the function rapidly takes a value of -1.0
-
-    Temperature parameter (T) determines how quickly this happens, set T << 1 to get
-    heavyside behavior.
-    """
-    return 2.0 / (1.0 + torch.exp(-(x - s) / T)) - 1
+from .states import get_states
 
 
 class TorchHysteresis(Module):
@@ -25,6 +14,7 @@ class TorchHysteresis(Module):
     def __init__(self,
                  h_train: Tensor = None,
                  mesh_scale: float = 1.0,
+                 temp: float = 1e-3,
                  trainable: bool = True,
                  tkwargs: Dict = None,
                  mesh_density_function: Callable = None):
@@ -53,6 +43,7 @@ class TorchHysteresis(Module):
         """
 
         super(TorchHysteresis, self).__init__()
+        self.temp = temp
         self.tkwargs = tkwargs or {}
         self.tkwargs.update({'dtype': torch.double, 'device': 'cpu'})
 
@@ -117,101 +108,7 @@ class TorchHysteresis(Module):
         return h * (self.h_max - self.h_min) + self.h_min
 
     def update_states(self, h: torch.Tensor):
-        self.states, _ = self.get_states(h)
-
-    def get_states(self, h: torch.Tensor):
-        """
-        Returns magnetic hysteresis state as an mxnxn tensor, where
-        m is the number of distinct applied magnetic fields. The
-        states are initially entirely off, and then updated per
-        time step depending on both the most recent applied magnetic
-        field and prior inputs (i.e. the "history" of the states tensor).
-
-        For each time step, the state matrix is either "swept up" or
-        "swept left" based on how the state matrix corresponds to like
-        elements in the meshgrid; the meshgrid contains alpha, beta
-        coordinates which serve as thresholds for the hysterion state to
-        "flip".
-
-        This calculation can be expensive, so we skip recalcuation until if h !=
-        current_h
-
-        See: https://www.wolframcloud.com/objects/demonstrations
-        /TheDiscretePreisachModelOfHysteresis-source.nb
-
-        Parameters
-        ----------
-        h : torch.Tensor,
-            The applied magnetic field H_1:t={H_1, ... ,H_t}, where
-            t represents each time step.
-
-        Raises
-        ------
-        ValueError
-            If n is negative.
-        """
-
-        n_mesh_points = self.mesh_points.shape[0]
-
-        # note running into machine precision issues when normalizing
-        if not (torch.all(h <= 1.0 + 1e-7) and torch.all(h >= 0.0 - 1e-7)):
-            raise ValueError('model not valid for applied fields outside unit domain')
-
-        # starts off off
-        hs = torch.cat((torch.zeros(1, **self.tkwargs), h))  # H_0=-t, negative
-
-        # list of hysteresis states with initial state set
-        states = torch.empty((len(hs), n_mesh_points), **self.tkwargs)
-        states[0] = torch.ones(n_mesh_points, **self.tkwargs) * -1.0
-
-        # flag to track if we need to recalculate states
-        # if there are no saved states then we need to calculate_states
-        if self._old_h is None and self._old_states is None:
-            calculate_states = True
-        else:
-            calculate_states = False
-
-        # loop through the states
-        n_calcs = 0
-        for i in range(1, len(hs)):
-            # check if state should be recalculated
-            if not calculate_states:
-                # if the two values of h do NOT match then we need to recalc the rest
-                # of the states
-                try:
-                    if not torch.isclose(hs[i], self._old_h[i]):
-                        calculate_states = True
-                except IndexError:
-                    calculate_states = True
-
-            # if we need to calculate the state do so - if not grab the old state
-            if calculate_states:
-                n_calcs += 1
-                if hs[i] > hs[i - 1]:
-                    # if the new applied field is greater than the old one, sweep up to
-                    # new applied field
-                    states[i] = torch.where(self.mesh_points[:, 1] <= hs[i],
-                                            torch.tensor(1.0, **self.tkwargs),
-                                            states[i - 1])
-
-                elif hs[i] < hs[i - 1]:
-                    # if the new applied field is less than the old one, sweep left to
-                    # new applied field
-                    states[i] = torch.where(self.mesh_points[:, 0] >= hs[i],
-                                            torch.tensor(-1.0, **self.tkwargs),
-                                            states[i - 1])
-                else:
-                    states[i] = states[i - 1]
-            else:
-                states[i] = self._old_states[i]
-
-        # preserve calculation for future use
-        self._old_h = hs
-        self._old_states = states
-        if n_calcs:
-            print(f'calculated {n_calcs} states')
-
-        return states, n_calcs
+        self.states = get_states(h, self.mesh_points, self.tkwargs, self.temp)
 
     def get_negative_saturation(self,
                                 density_vector: Tensor = None,
@@ -298,10 +195,10 @@ class TorchHysteresis(Module):
                 normed_h = normed_h_new
             else:
                 normed_h = torch.cat((self.h_train, normed_h_new))
-            states, _ = self.get_states(normed_h)
+            states = get_states(normed_h, self.mesh_points, self.tkwargs, self.temp)
         elif h is not None:
             normed_h = self.normalize_h(h)
-            states, _ = self.get_states(normed_h)
+            states = get_states(normed_h, self.mesh_points, self.tkwargs, self.temp)
 
         else:
             # if no states have been calculated
@@ -310,6 +207,6 @@ class TorchHysteresis(Module):
             else:
                 return self.get_negative_saturation(density_vector, scale, offset)[0]
 
-        m = torch.sum(hyst_density_vector * states[1:], dim=-1) \
+        m = torch.sum(hyst_density_vector * states, dim=-1) \
             / len(hyst_density_vector)
         return s * m + o
