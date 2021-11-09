@@ -15,11 +15,12 @@ def summary(samples):
 
 
 def predict(h, model, guide):
-    predictive = Predictive(model,
-                            guide=guide,
-                            num_samples=500,
-                            return_sites=['_RETURN', 'obs', 'density','scale',
-                                          'offset'])
+    predictive = Predictive(
+        model,
+        guide=guide,
+        num_samples=500,
+        return_sites=["_RETURN", "obs", "density", "scale", "offset"],
+    )
 
     samples = predictive(h)
     pred_summary = summary(samples)

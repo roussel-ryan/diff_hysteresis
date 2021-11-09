@@ -43,23 +43,28 @@ def rot(alpha):
 class TorchQuad(Module):
     def __init__(self, name, length, K1):
         Module.__init__(self)
-        self.register_parameter('L', torch.nn.parameter.Parameter(length))
-        self.register_parameter('K1', torch.nn.parameter.Parameter(K1))
+        self.register_parameter("L", torch.nn.parameter.Parameter(length))
+        self.register_parameter("K1", torch.nn.parameter.Parameter(K1))
 
         self.name = name
 
-    def forward(self, K1=None):
+    def forward(self):
+        return self.get_matrix(self.K1)
+
+    def get_matrix(self, K1):
         M = torch.eye(6)
 
-        K1 = K1 or self.K1
-
-        if K1 < 0:
+        if K1 < 0.0:
             K1 = -K1
             flip = True
-        else:
+        elif K1 > 0.0:
             K1 = K1
             flip = False
+        else:
+            K1 = K1 + torch.tensor(1.0e-10)
+            flip = False
 
+        # clip to make sure we don't run into divide by zero errors
         k = torch.sqrt(K1)
 
         kl = self.L * k
@@ -74,7 +79,7 @@ class TorchQuad(Module):
         M[3, 3] = torch.cosh(kl)
 
         if flip:
-            M = rot(- np.pi / 2) @ M @ rot(np.pi / 2)
+            M = rot(-np.pi / 2) @ M @ rot(np.pi / 2)
 
         return M
 
@@ -84,9 +89,9 @@ class TorchDrift(Module):
         Module.__init__(self)
         self.name = name
         if fixed:
-            self.register_buffer('L', torch.nn.parameter.Parameter(length))
+            self.register_buffer("L", torch.nn.parameter.Parameter(length))
         else:
-            self.register_parameter('L', torch.nn.parameter.Parameter(length))
+            self.register_parameter("L", torch.nn.parameter.Parameter(length))
 
     def forward(self):
         M = torch.eye(6)

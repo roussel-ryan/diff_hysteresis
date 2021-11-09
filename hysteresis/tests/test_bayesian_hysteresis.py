@@ -25,5 +25,3 @@ class TestBayesianHysteresis:
         B = BayesianHysteresis(H)
 
         guide, loss = train_bayes(h_data, m_data, B, 10)
-
-

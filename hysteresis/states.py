@@ -2,24 +2,27 @@ import torch
 
 
 def sweep_up(h, mesh, initial_state, T=1e-2):
-    return torch.minimum(initial_state + switch(h, mesh[:, 1], T),
-                         torch.ones_like(mesh[:, 1]))
+    return torch.minimum(
+        initial_state + switch(h, mesh[:, 1], T), torch.ones_like(mesh[:, 1])
+    )
 
 
 def sweep_left(h, mesh, initial_state, T=1e-2):
-    return torch.maximum(initial_state - switch(mesh[:, 0], h, T),
-                         torch.ones_like(mesh[:, 0]) * -1.0)
+    return torch.maximum(
+        initial_state - switch(mesh[:, 0], h, T), torch.ones_like(mesh[:, 0]) * -1.0
+    )
 
 
 def switch(h, m, T=1e-4):
-    return 2 / (1 + torch.exp((m - h) / T))
+    return 1.0 + torch.tanh((h - m) / T)
 
 
-def get_states(h: torch.Tensor,
-               mesh_points: torch.Tensor,
-               tkwargs=None,
-               temp=1e-3,
-               ):
+def get_states(
+    h: torch.Tensor,
+    mesh_points: torch.Tensor,
+    tkwargs=None,
+    temp=1e-3,
+):
     """
     Returns magnetic hysteresis state as an mxnxn tensor, where
     m is the number of distinct applied magnetic fields. The

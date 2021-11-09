@@ -33,21 +33,21 @@ def optimize(accelerator_model, initial_beam_matrix):
         optimizer.step()
 
 
-#hysteresis model
-H = TorchHysteresis(mesh_scale=0.1, trainable=False)
+# hysteresis model
+H = TorchHysteresis(mesh_scale=0.1)
 dens = density_function(H.mesh_points)
 H.h_min = -1.0
 H.hysterion_density = dens
 
 # define quadrupoles
-q1 = HysteresisQuad('q1', torch.tensor(0.1), deepcopy(H), scale=torch.tensor(100.0))
-d1 = TorchDrift('d1', torch.tensor(1.0))
+q1 = HysteresisQuad("q1", torch.tensor(0.1), deepcopy(H), scale=torch.tensor(100.0))
+d1 = TorchDrift("d1", torch.tensor(1.0))
 
 
 HA = HysteresisAccelerator([q1, d1])
 
 for name, val in HA.named_parameters():
-    print(f'{name}:{val}')
+    print(f"{name}:{val}")
 
 R = torch.eye(6)
 optimize(HA, R)

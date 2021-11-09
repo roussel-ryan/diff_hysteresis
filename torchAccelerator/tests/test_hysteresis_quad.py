@@ -13,49 +13,86 @@ def density_function(mesh_pts):
 
 
 class TestHysteresisQuad:
+    def test_quad_grad(self):
+        Q = TorchQuad("q1", torch.tensor(1.0), torch.tensor(1.0))
+        M = Q.forward()
+        M[0, 0].backward()
+        assert Q.K1.grad == -torch.sin(torch.tensor(1.0)) / 2.0
+
+        new_tensor = torch.tensor(-0.5, requires_grad=True)
+        M = Q.get_matrix(new_tensor)
+        M[1, 0].backward()
+        assert torch.isclose(new_tensor.grad, torch.tensor(-1.173), atol=1e-4)
+
+        new_tensor = torch.tensor(-100.5, requires_grad=True)
+        M = Q.get_matrix(new_tensor)
+        M[0, 0].backward()
+
     def test_hysteresis_quad(self):
-        H = TorchHysteresis(mesh_scale=0.1, trainable=False)
+        with torch.autograd.detect_anomaly():
+            h_data = torch.linspace(0, 1.0, 10)
+            H = TorchHysteresis(h_data, mesh_scale=0.1)
+            HQ = HysteresisQuad("Q1", torch.tensor(1.0), H, scale=torch.tensor(1.0))
 
-        dens = density_function(H.mesh_points)
-        H.hysterion_density = dens
-        #plot_hysteresis_density(H)
+            # test gradient for calculating the transport matrix from magnetization
+            x = torch.tensor(0.5, requires_grad=True)
+            matrix = HQ._calculate_beam_matrix(x)
+            matrix[0, 0].backward()
+            assert not torch.isnan(x.grad)
 
-        t = torch.linspace(0, 1, 20)
-        test_h = torch.cat((t, t.flipud()))
-        K1 = 100.0*0.75*(2*test_h - 1)
-        pred = H.predict_magnetization(test_h)
+            x = torch.tensor(0.0, requires_grad=True)
+            matrix = HQ._calculate_beam_matrix(x)
+            matrix[0, 0].backward()
+            assert not torch.isnan(x.grad)
 
-        Q = TorchQuad('q1', torch.tensor(0.01), torch.tensor(0.0))
-        HQ = HysteresisQuad('Q1', torch.tensor(0.01), H, scale=100.0)
-        D = TorchDrift('d1', torch.tensor(5.0))
+            x = torch.tensor(-0.5, requires_grad=True)
+            matrix = HQ._calculate_beam_matrix(x)
+            matrix[0, 0].backward()
+            assert not torch.isnan(x.grad)
 
-        # initial beam matrix
-        R = torch.eye(6)
+            # test calculating magnetization
+            x = torch.tensor(0.0, requires_grad=True)
+            m = HQ.hysteresis_model.predict_magnetization(h=x)
+            m[0].backward()
+            assert not torch.isnan(x.grad)
 
-        HA = HysteresisAccelerator([HQ, D])
-        A = HysteresisAccelerator([Q, D])
-        for name, val in HA.named_parameters():
-            print(f'{name}: {val}')
-        for name, val in A.named_parameters():
-            print(f'{name}: {val}')
+            # test gradient for calculating the transport matrix from applied field
+            x = torch.tensor(0.2, requires_grad=True)
+            matrix = HQ.get_transport_matrix(x)
+            matrix[0, 0].backward()
+            assert not torch.isnan(x.grad)
 
-        HA.apply_fields({'Q1': test_h[:25]})
-        #print(HA.calculate_transport())
+            HQ.fantasy_H.data = torch.tensor(0.5)
+            matrix = HQ.forward()
+            matrix[1, 0].backward()
+            assert not torch.isnan(HQ.fantasy_H.grad)
+            auto_diff_grad = HQ.fantasy_H.grad.clone()
 
-        # scan H_fantasy
-        out_h = []
-        out = []
-        for val in test_h.unsqueeze(1):
-            HA.Q1.fantasy_H.data = val
-            A.q1.K1.data = 100.0*0.75*(2*val - 1)
-            R_f = HA(R)
-            out_h += [R_f[0, 0].detach()]
-
-            R_f = A(R)
-            out += [R_f[0, 0].detach()]
-
-        plt.plot(test_h, out, label='hysteresis_off')
-        plt.plot(test_h, out_h, label='hysteresis_on')
-        plt.legend()
-
-        plt.show()
+            # check against numerical gradient
+            dx = torch.tensor(0.0001)
+            HQ.fantasy_H.data = torch.tensor(0.5) + dx
+            matrix_dx = HQ.forward()
+            approx = (matrix_dx[1, 0] - matrix[1, 0]) / dx
+            assert torch.isclose(auto_diff_grad, approx, rtol=0.05)
+            # values = torch.linspace(0.0, 1.0, 100)
+            # bs = []
+            # bs_grad = []
+            #
+            # for ele in values:
+            #     # NOTE: Don't forget that gradients accumulate!!###########
+            #     HQ.fantasy_H.grad.zero_()
+            #     HQ.fantasy_H.data = ele
+            #     matrix = HQ.forward()
+            #     matrix[1, 0].backward()
+            #     bs += [matrix[1, 0].detach()]
+            #     bs_grad += [HQ.fantasy_H.grad.clone()]
+            #
+            # plt.plot(values, bs_grad)
+            # plt.figure()
+            # plt.plot(values, bs)
+            # idx = 50
+            # print(f"grad_loc:{values[idx]}")
+            # grad_approx = (bs[idx] - bs[idx - 1]) / (values[idx] - values[idx - 1])
+            # print(f"grad_approx:{grad_approx}")
+            # print(f"torch_grad:{bs_grad[idx]}")
+            # plt.show()

@@ -11,62 +11,35 @@ class HysteresisMagnet(Module, ABC):
         Module.__init__(self)
         self.name = name
         self.history = None
-        self.register_buffer(f'length',
-                             Parameter(L))
-        self.register_parameter('fantasy_H',
-                                Parameter(-1.0*torch.ones(1)))
+        self.register_buffer(f"length", Parameter(L))
+        self.register_parameter("fantasy_H", Parameter(-1.0 * torch.ones(1)))
         self.hysteresis_model = hysteresis_model
-        self.mode = 'fantasy'
+        self.mode = "fantasy"
 
     def apply_field(self, H: Tensor):
-        if self.history is None:
+        if not isinstance(self.history, torch.Tensor):
             self.history = H
         else:
             self.history = torch.cat((self.history, H))
 
-    def get_magnetization(self, h_fantasy: Tensor = None) -> Tensor:
-        """
-        Get magnetization from the hysteresis model
+    def get_transport_matrix(self, h):
+        m = self.hysteresis_model.predict_magnetization(h=torch.atleast_1d(h))
+        m_last = m[-1] if m.shape else m
+        return self._calculate_beam_matrix(m_last)
 
-        Parameters
-        ----------
-        h_fantasy : Tensor, optional
-            If specified calculate the magnetization at a fantasy point `h_fantasy`
-            given the current history state. Otherwise, return the magnetization at
-            the last history.
-
-        Returns
-        -------
-        m : Tensor
-            Magnetization value
-
-        """
-        if h_fantasy is None:
-            h = self.history
+    def get_fantasy_transport_matrix(self, h_fantasy):
+        if isinstance(self.history, torch.Tensor):
+            h = torch.cat((self.history, torch.atleast_1d(h_fantasy)))
         else:
-            if self.history is not None:
-                h = torch.cat((self.history, h_fantasy))
-            else:
-                h = h_fantasy
-
-        if h is not None:
-            m = self.hysteresis_model.predict_magnetization(h=torch.atleast_1d(h))
-        else:
-            m = self.hysteresis_model.predict_magnetization()
-        m = m[-1] if m.shape else m
-
-        return m
-
-    def get_transport_matrix(self, fantasy_H: Tensor = None):
-        m = self.get_magnetization(fantasy_H)
-        return self._calculate_beam_matrix(m)
+            h = torch.atleast_1d(h_fantasy)
+        return self.get_transport_matrix(h)
 
     @property
     def M(self) -> Tensor:
-        """ get current beam matrix """
-        self.mode = 'current'
-        matr = self.get_transport_matrix()
-        self.mode = 'fantasy'
+        """get current beam matrix"""
+        self.mode = "current"
+        matr = self.get_transport_matrix(self.history)
+        self.mode = "fantasy"
         return matr
 
     @property
@@ -75,7 +48,7 @@ class HysteresisMagnet(Module, ABC):
 
     def forward(self) -> Tensor:
         """predict future beam matrix for optimization"""
-        return self.get_transport_matrix(self.fantasy_H)
+        return self.get_fantasy_transport_matrix(self.fantasy_H)
 
     @abstractmethod
     def _calculate_beam_matrix(self, m: Tensor):
@@ -103,9 +76,9 @@ class HysteresisAccelerator(TorchAccelerator):
         M_tot = torch.eye(6)
         for _, ele in self.elements.items():
             if isinstance(ele, HysteresisMagnet):
-                ele.mode = 'current'
+                ele.mode = "current"
                 M = ele()
-                ele.mode = 'fantasy'
+                ele.mode = "fantasy"
             else:
                 M = ele()
 
@@ -120,12 +93,10 @@ class HysteresisAccelerator(TorchAccelerator):
 class HysteresisQuad(HysteresisMagnet):
     def __init__(self, name, length, hysteresis_model, scale=1.0):
         super(HysteresisQuad, self).__init__(name, length, hysteresis_model)
-        self.quad_model = TorchQuad('', length, torch.zeros(1))
+        self.quad_model = TorchQuad("", length, torch.ones(1))
         self.quad_model.K1.requires_grad = False
         self.quad_model.L.requires_grad = False
         self.scale = scale
 
     def _calculate_beam_matrix(self, m: Tensor):
-        return self.quad_model.forward(m * self.scale)
-
-
+        return self.quad_model.get_matrix(m * self.scale)

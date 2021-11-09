@@ -54,4 +54,3 @@ class TestStateCalc:
 
         plt.tripcolor(*mesh.T, states[-1].detach())
         plt.show()
-

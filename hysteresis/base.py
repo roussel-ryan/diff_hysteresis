@@ -11,13 +11,15 @@ class TorchHysteresis(Module):
     _old_h = None
     _old_states = None
 
-    def __init__(self,
-                 h_train: Tensor = None,
-                 mesh_scale: float = 1.0,
-                 temp: float = 1e-3,
-                 trainable: bool = True,
-                 tkwargs: Dict = None,
-                 mesh_density_function: Callable = None):
+    def __init__(
+        self,
+        h_train: Tensor = None,
+        mesh_scale: float = 1.0,
+        temp: float = 1e-3,
+        trainable: bool = True,
+        tkwargs: Dict = None,
+        mesh_density_function: Callable = None,
+    ):
         """
         Torch module used to numerically calculate hysteresis using a
         Preisach hysteresis model while preserving gradient information.
@@ -45,18 +47,14 @@ class TorchHysteresis(Module):
         super(TorchHysteresis, self).__init__()
         self.temp = temp
         self.tkwargs = tkwargs or {}
-        self.tkwargs.update({'dtype': torch.double, 'device': 'cpu'})
+        self.tkwargs.update({"dtype": torch.double, "device": "cpu"})
 
         self.trainable = trainable
 
         # generate mesh grid on 2D normalized domain [[0,1],[0,1]]
         self.mesh_scale = mesh_scale
         self.mesh_points = torch.tensor(
-            create_triangle_mesh(
-                mesh_scale,
-                mesh_density_function
-            ),
-            **self.tkwargs
+            create_triangle_mesh(mesh_scale, mesh_density_function), **self.tkwargs
         )
 
         # generate hysterion density vector, offset and scale parameters
@@ -66,14 +64,14 @@ class TorchHysteresis(Module):
 
         # if trainable register the parameters
         if self.trainable:
-            self.register_parameter('_raw_hyst_density', Parameter(hyst_density))
-            self.register_parameter('offset', Parameter(offset))
-            self.register_parameter('scale', Parameter(scale))
+            self.register_parameter("_raw_hyst_density", Parameter(hyst_density))
+            self.register_parameter("offset", Parameter(offset))
+            self.register_parameter("scale", Parameter(scale))
 
         else:
-            self.register_buffer('_raw_hyst_density', Parameter(hyst_density))
-            self.register_buffer('offset', Parameter(offset))
-            self.register_buffer('scale', Parameter(scale))
+            self.register_buffer("_raw_hyst_density", Parameter(hyst_density))
+            self.register_buffer("offset", Parameter(offset))
+            self.register_buffer("scale", Parameter(scale))
 
         if h_train is not None:
             # normalize training data
@@ -93,8 +91,9 @@ class TorchHysteresis(Module):
 
     @hysterion_density.setter
     def hysterion_density(self, value):
-        self._raw_hyst_density = Parameter(torch.log(torch.exp(value) - 1).to(
-            **self.tkwargs))
+        self._raw_hyst_density = Parameter(
+            torch.log(torch.exp(value) - 1).to(**self.tkwargs)
+        )
         if not self.trainable:
             self._raw_hyst_density.requires_grad = False
 
@@ -110,12 +109,10 @@ class TorchHysteresis(Module):
     def update_states(self, h: torch.Tensor):
         self.states = get_states(h, self.mesh_points, self.tkwargs, self.temp)
 
-    def get_negative_saturation(self,
-                                density_vector: Tensor = None,
-                                scale: Tensor = None,
-                                offset: Tensor = None
-                                ):
-        """ get the nagetive stautration magnetization given a set of parameters
+    def get_negative_saturation(
+        self, density_vector: Tensor = None, scale: Tensor = None, offset: Tensor = None
+    ):
+        """get the nagetive stautration magnetization given a set of parameters
         internal or specified via argument"""
         # get the density vector from the raw version
         if density_vector is None:
@@ -126,18 +123,22 @@ class TorchHysteresis(Module):
         s = scale if scale is not None else self.scale
         o = offset if offset is not None else self.offset
 
-        neg_sat_state = torch.ones((1, self.mesh_points.shape[0]), **self.tkwargs) * \
-                        -1.0
-        m = torch.sum(hyst_density_vector * neg_sat_state, dim=-1) \
-            / len(hyst_density_vector)
+        neg_sat_state = (
+            torch.ones((1, self.mesh_points.shape[0]), **self.tkwargs) * -1.0
+        )
+        m = torch.sum(hyst_density_vector * neg_sat_state, dim=-1) / len(
+            hyst_density_vector
+        )
         return s * m + o
 
-    def predict_magnetization(self,
-                              h: Tensor = None,
-                              h_new: Tensor = None,
-                              density_vector: Tensor = None,
-                              scale: Tensor = None,
-                              offset: Tensor = None) -> Tensor:
+    def predict_magnetization(
+        self,
+        h: Tensor = None,
+        h_new: Tensor = None,
+        density_vector: Tensor = None,
+        scale: Tensor = None,
+        offset: Tensor = None,
+    ) -> Tensor:
         """
         Predict the magnetization using the Preisach model
 
@@ -176,37 +177,37 @@ class TorchHysteresis(Module):
 
         """
 
-        assert not (h is not None and h_new is not None), 'cannot specify both h and ' \
-                                                          'h_new'
+        if isinstance(h, torch.Tensor) and isinstance(h_new, torch.Tensor):
+            raise RuntimeError("cannot specify both h/h_new")
 
         # get the density vector from the raw version
-        if density_vector is None:
+        if not isinstance(density_vector, torch.Tensor):
             hyst_density_vector = torch.nn.Softplus()(self._raw_hyst_density)
         else:
             hyst_density_vector = torch.nn.Softplus()(density_vector)
 
-        s = scale if scale is not None else self.scale
-        o = offset if offset is not None else self.offset
+        s = scale if isinstance(scale, torch.Tensor) else self.scale
+        o = offset if isinstance(offset, torch.Tensor) else self.offset
 
         # get the states based on h
-        if h_new is not None:
+        if isinstance(h_new, torch.Tensor):
             normed_h_new = self.normalize_h(h_new)
             if self.h_train is None:
                 normed_h = normed_h_new
             else:
-                normed_h = torch.cat((self.h_train, normed_h_new))
+                normed_h = torch.cat((self.h_train, torch.atleast_1d(normed_h_new)))
             states = get_states(normed_h, self.mesh_points, self.tkwargs, self.temp)
-        elif h is not None:
-            normed_h = self.normalize_h(h)
+
+        elif isinstance(h, torch.Tensor):
+            normed_h = self.normalize_h(torch.atleast_1d(h))
             states = get_states(normed_h, self.mesh_points, self.tkwargs, self.temp)
 
         else:
             # if no states have been calculated
-            if self.states is not None:
+            if isinstance(self.states, torch.Tensor):
                 states = self.states
             else:
                 return self.get_negative_saturation(density_vector, scale, offset)[0]
 
-        m = torch.sum(hyst_density_vector * states, dim=-1) \
-            / len(hyst_density_vector)
+        m = torch.sum(hyst_density_vector * states, dim=-1) / len(hyst_density_vector)
         return s * m + o

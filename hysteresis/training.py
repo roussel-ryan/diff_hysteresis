@@ -8,8 +8,7 @@ def train_torch(model, magnetization, n_steps, lr=0.1):
     def loss_fn(m, m_pred):
         return torch.sum((m - m_pred) ** 2)
 
-    optimizer = torch.optim.Adam(model.parameters(),
-                                 lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     loss_track = []
     for i in range(n_steps):
@@ -30,7 +29,7 @@ def train_bayes(h, m, model, num_steps, guide=None, initial_lr=0.001, gamma=0.1)
     guide = guide or AutoMultivariateNormal(model)
 
     lrd = gamma ** (1 / num_steps)
-    optim = pyro.optim.ClippedAdam({'lr': initial_lr, 'lrd': lrd})
+    optim = pyro.optim.ClippedAdam({"lr": initial_lr, "lrd": lrd})
     svi = SVI(model, guide, optim, loss=Trace_ELBO())
 
     pyro.clear_param_store()
@@ -54,4 +53,5 @@ def map_bayes(h, m, model, num_steps, initial_lr=0.001, gamma=0.1):
 def mle_bayes(h, m, model, num_steps, initial_lr=0.001, gamma=0.1):
     def empty_guide(X, Y):
         pass
+
     return train_bayes(h, m, model, num_steps, empty_guide, initial_lr, gamma)
