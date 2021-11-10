@@ -1,3 +1,4 @@
+import pytest
 import torch
 from hysteresis.base import TorchHysteresis
 from hysteresis.linearized import LinearizedHysteresis
@@ -11,7 +12,6 @@ class TestStateCalc:
         h = torch.tensor(1.0, requires_grad=True)
         dummy = h * 4.0
         dummy.backward()
-        print(h.grad)
 
     def test_switches(self):
         mesh = torch.tensor(create_triangle_mesh(1.0))
@@ -52,5 +52,18 @@ class TestStateCalc:
         total.backward()
         assert not torch.any(torch.isnan(h.grad))
 
-        plt.tripcolor(*mesh.T, states[-1].detach())
-        plt.show()
+        #plt.tripcolor(*mesh.T, states[-1].detach())
+        #plt.show()
+
+    def test_error_handling(self):
+        mesh = torch.tensor(create_triangle_mesh(0.1))
+        h = torch.tensor((0.5, 0.75, 0.4, 0.5, 1.0, 0.0))
+        states = get_states(h, mesh_points=mesh)
+
+        h = torch.tensor((0.5, 1.75, 0.4, 0.5))
+        with pytest.raises(RuntimeError):
+            states = get_states(h, mesh_points=mesh)
+
+        h = torch.tensor((-0.5, 0.75, 0.4, 0.5))
+        with pytest.raises(RuntimeError):
+            states = get_states(h, mesh_points=mesh)

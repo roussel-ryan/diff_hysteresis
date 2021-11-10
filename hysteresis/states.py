@@ -56,6 +56,10 @@ def get_states(
     ValueError
         If n is negative.
     """
+    # verify the inputs are in the normalized region
+    if not (torch.all(torch.greater_equal(h, torch.zeros(1))) and torch.all(
+            torch.less_equal(h, torch.ones(1)))):
+        raise RuntimeError('applied values are outside of the unit domain')
 
     n_mesh_points = mesh_points.shape[0]
     tkwargs = tkwargs or {}
@@ -80,7 +84,7 @@ def get_states(
             # new applied field
             states += [sweep_left(h[i], mesh_points, states[i - 1], temp)]
         else:
-            states[i] = states[i - 1]
+            states += [states[i - 1]]
 
     # concatenate states into one tensor
     total_states = torch.cat([ele.unsqueeze(0) for ele in states])

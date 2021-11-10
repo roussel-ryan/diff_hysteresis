@@ -29,7 +29,6 @@ HA = HysteresisAccelerator([q1, d1])
 R = torch.eye(6)
 
 # predict transport matrix of quad at negative limit
-print(q1.M)
 
 # predict the beam matrix at negative limit
 print(HA(R))
@@ -43,11 +42,13 @@ h_f = torch.linspace(-1, 1, 100)
 bs = []
 bs_grad = []
 for ele in h_f:
+
     HA.q1.fantasy_H.data = ele
     bs += [HA(R)[0, 0].detach()]
 
     HA(R)[0, 0].backward()
     bs_grad += [HA.q1.fantasy_H.grad.clone()]
+    HA.q1.fantasy_H.grad.zero_()
 
 plt.plot(h_f, bs_grad)
 

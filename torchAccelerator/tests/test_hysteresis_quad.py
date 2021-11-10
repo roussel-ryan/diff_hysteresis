@@ -74,25 +74,25 @@ class TestHysteresisQuad:
             matrix_dx = HQ.forward()
             approx = (matrix_dx[1, 0] - matrix[1, 0]) / dx
             assert torch.isclose(auto_diff_grad, approx, rtol=0.05)
-            # values = torch.linspace(0.0, 1.0, 100)
-            # bs = []
-            # bs_grad = []
-            #
-            # for ele in values:
-            #     # NOTE: Don't forget that gradients accumulate!!###########
-            #     HQ.fantasy_H.grad.zero_()
-            #     HQ.fantasy_H.data = ele
-            #     matrix = HQ.forward()
-            #     matrix[1, 0].backward()
-            #     bs += [matrix[1, 0].detach()]
-            #     bs_grad += [HQ.fantasy_H.grad.clone()]
-            #
-            # plt.plot(values, bs_grad)
-            # plt.figure()
-            # plt.plot(values, bs)
-            # idx = 50
-            # print(f"grad_loc:{values[idx]}")
-            # grad_approx = (bs[idx] - bs[idx - 1]) / (values[idx] - values[idx - 1])
-            # print(f"grad_approx:{grad_approx}")
-            # print(f"torch_grad:{bs_grad[idx]}")
-            # plt.show()
+
+    def test_autograd_w_applied_fields(self):
+        with torch.autograd.detect_anomaly():
+            h_data = torch.linspace(0, 1.0, 10)
+            H = TorchHysteresis(h_data, mesh_scale=0.1)
+            HQ = HysteresisQuad("Q1", torch.tensor(1.0), H, scale=torch.tensor(1.0))
+
+            # apply new field
+            new_H = torch.tensor(0.5)
+            HQ.apply_field(new_H)
+
+            # calculate grad
+            HQ.fantasy_H.data = torch.tensor(0.5)
+            matrix = HQ.forward()
+            matrix[1, 0].backward()
+            assert not torch.isnan(HQ.fantasy_H.grad)
+            print(HQ.fantasy_H.grad)
+            print(HQ.fantasy_H)
+
+
+
+

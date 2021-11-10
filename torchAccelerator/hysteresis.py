@@ -18,9 +18,9 @@ class HysteresisMagnet(Module, ABC):
 
     def apply_field(self, H: Tensor):
         if not isinstance(self.history, torch.Tensor):
-            self.history = H
+            self.history = torch.atleast_1d(H)
         else:
-            self.history = torch.cat((self.history, H))
+            self.history = torch.cat((self.history, torch.atleast_1d(H)))
 
     def get_transport_matrix(self, h):
         m = self.hysteresis_model.predict_magnetization(h=torch.atleast_1d(h))
