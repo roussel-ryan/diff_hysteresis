@@ -92,7 +92,3 @@ class TestHysteresisQuad:
             assert not torch.isnan(HQ.fantasy_H.grad)
             print(HQ.fantasy_H.grad)
             print(HQ.fantasy_H)
-
-
-
-

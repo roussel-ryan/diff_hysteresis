@@ -41,7 +41,7 @@ def optimize(accelerator_model, initial_beam_matrix, apply_fields=False):
         optimizer.step()
 
         if apply_fields:
-            accelerator_model.apply_fields({'q1': points[-1]})
+            accelerator_model.apply_fields({"q1": points[-1]})
 
     return points, losses
 
@@ -61,12 +61,12 @@ HA.q1.fantasy_H.data = torch.tensor(-0.5)
 
 for name, val in HA.named_parameters():
     if val.requires_grad:
-        print(f'{name}:{val}')
+        print(f"{name}:{val}")
 
 # do optimization
 R = torch.eye(6)
 p, l = optimize(HA, R, True)
-plt.plot(p, l, 'o-')
+plt.plot(p, l, "o-")
 
 # plot beam size as a function of fantasy_H
 h_f = torch.linspace(-1.0, 1, 100)

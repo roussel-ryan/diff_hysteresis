@@ -57,9 +57,11 @@ def get_states(
         If n is negative.
     """
     # verify the inputs are in the normalized region
-    if not (torch.all(torch.greater_equal(h, torch.zeros(1))) and torch.all(
-            torch.less_equal(h, torch.ones(1)))):
-        raise RuntimeError('applied values are outside of the unit domain')
+    if not (
+        torch.all(torch.greater_equal(h, torch.zeros(1)))
+        and torch.all(torch.less_equal(h, torch.ones(1)))
+    ):
+        raise RuntimeError("applied values are outside of the unit domain")
 
     n_mesh_points = mesh_points.shape[0]
     tkwargs = tkwargs or {}

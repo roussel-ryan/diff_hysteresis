@@ -52,8 +52,8 @@ class TestStateCalc:
         total.backward()
         assert not torch.any(torch.isnan(h.grad))
 
-        #plt.tripcolor(*mesh.T, states[-1].detach())
-        #plt.show()
+        # plt.tripcolor(*mesh.T, states[-1].detach())
+        # plt.show()
 
     def test_error_handling(self):
         mesh = torch.tensor(create_triangle_mesh(0.1))

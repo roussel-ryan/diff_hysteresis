@@ -4,8 +4,16 @@ from torch.nn import Module
 
 
 class TorchAccelerator(Module):
-    def __init__(self, elements):
+    def __init__(self, elements, allow_duplicates=False):
         Module.__init__(self)
+
+        # check to make sure no duplicate names exist
+        names = []
+        for ele in elements:
+            if ele.name not in names or allow_duplicates:
+                names += [ele.name]
+            else:
+                raise RuntimeError(f'duplicate name {ele.name} found but not allowed')
 
         self.elements = {element.name: element for element in elements}
 
@@ -13,14 +21,52 @@ class TorchAccelerator(Module):
             self.add_module(ele.name, ele)
 
     def calculate_transport(self):
-        M = torch.eye(6)
+        M_i = torch.eye(6)
+        M = [M_i]
         for _, ele in self.elements.items():
-            M = torch.matmul(ele(), M)
-        return M
+            M += [torch.matmul(ele(), M[-1])]
+        return torch.cat([m.unsqueeze(0) for m in M], dim=0)
 
-    def forward(self, R):
+    @staticmethod
+    def propagate_beam(M, R):
+        """
+        Propagate beam given a initial beam matrix R, and a beam transport
+        matrix/matricies M
+        Parameters
+        ----------
+        M : torch.Tensor
+            Transport matrix of form n x 6 x 6 where n is the number of beam
+            matricies to calculate (not necessarily in order)
+        R : torch.Tensor
+            Initial beam matrix
+
+        """
+        if not M.shape[-2:] == torch.Size([6, 6]):
+            raise RuntimeError('last dims of transport matrix must be 6 x 6')
+
+        return torch.matmul(M, torch.matmul(R, torch.transpose(M, -2, -1)))
+
+    def forward(self, R, full=True):
+        """
+        Calculate the beam matrix. If full is True (default) the beam matrix at the
+        end of the beamline is returned. If False the beam matrix after every element
+        is returned.
+
+        Parameters
+        ----------
+        R
+        full
+
+        Returns
+        -------
+
+        """
         M = self.calculate_transport()
-        return M @ R @ torch.transpose(M, 0, 1)
+        R_f = self.propagate_beam(M, R)
+        if full:
+            return R_f[-1]
+        else:
+            return R_f
 
 
 def rot(alpha):

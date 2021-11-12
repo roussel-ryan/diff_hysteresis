@@ -32,13 +32,12 @@ def optimize(accelerator_model, initial_beam_matrix, apply_fields=False):
     train_Y = beamsize(accelerator_model, initial_beam_matrix).reshape(1, 1)
 
     if apply_fields:
-        print(f'applying field {train_X[-1]}')
-        accelerator_model.apply_fields({'q1': train_X[-1]})
+        print(f"applying field {train_X[-1]}")
+        accelerator_model.apply_fields({"q1": train_X[-1]})
 
     for i in range(iterations):
         std_trans = Standardize(1)
-        gp = SingleTaskGP(train_X, train_Y.detach(),
-                          outcome_transform=std_trans)
+        gp = SingleTaskGP(train_X, train_Y.detach(), outcome_transform=std_trans)
         mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
         fit_gpytorch_model(mll)
 
@@ -46,7 +45,11 @@ def optimize(accelerator_model, initial_beam_matrix, apply_fields=False):
 
         bounds = torch.stack([-1.0 * torch.ones(1), torch.ones(1)])
         candidate, acq_value = optimize_acqf(
-            UCB, bounds=bounds, q=1, num_restarts=5, raw_samples=20,
+            UCB,
+            bounds=bounds,
+            q=1,
+            num_restarts=5,
+            raw_samples=20,
         )
         train_X = torch.cat((train_X, candidate.reshape(1, 1)))
         accelerator_model.q1.fantasy_H.data = candidate[0]
@@ -56,8 +59,8 @@ def optimize(accelerator_model, initial_beam_matrix, apply_fields=False):
         train_Y = torch.cat((train_Y, bs))
 
         if apply_fields:
-            print(f'applying field {train_X[-1]}')
-            accelerator_model.apply_fields({'q1': train_X[-1]})
+            print(f"applying field {train_X[-1]}")
+            accelerator_model.apply_fields({"q1": train_X[-1]})
 
     return train_X, train_Y, gp
 
@@ -77,7 +80,7 @@ HA.q1.fantasy_H.data = torch.tensor(-0.5)
 
 for name, val in HA.named_parameters():
     if val.requires_grad:
-        print(f'{name}:{val}')
+        print(f"{name}:{val}")
 
 # do optimization
 R = torch.eye(6)
@@ -88,9 +91,9 @@ fig2, ax2 = plt.subplots()
 # plot beam size as a function of fantasy_H
 h_f = torch.linspace(-1.0, 1, 100)
 
-for ele, c in zip([False, True], ['C0', 'C1']):
+for ele, c in zip([False, True], ["C0", "C1"]):
     p, l, model = optimize(deepcopy(HA), R, ele)
-    ax.plot(p.squeeze(), l.squeeze().detach(), 'o', c=c)
+    ax.plot(p.squeeze(), l.squeeze().detach(), "o", c=c)
     ax2.plot(l.squeeze().detach(), c=c)
 
     # add gp model to plot
@@ -100,14 +103,15 @@ for ele, c in zip([False, True], ['C0', 'C1']):
         mean, var = model.outcome_transform.untransform(post.mean, post.variance)
         std = torch.sqrt(var)
     ax.plot(h_f, mean.squeeze(), c=c)
-    ax.fill_between(h_f, (mean - std).squeeze(), (mean + std).squeeze(), alpha=0.25,
-                    fc=c)
+    ax.fill_between(
+        h_f, (mean - std).squeeze(), (mean + std).squeeze(), alpha=0.25, fc=c
+    )
 
 bs = []
 for ele in h_f:
     HA.q1.fantasy_H.data = ele
     bs += [beamsize(HA, R).detach()]
 
-ax.plot(h_f, bs,c='C2', label="step 0")
+ax.plot(h_f, bs, c="C2", label="step 0")
 
 plt.show()

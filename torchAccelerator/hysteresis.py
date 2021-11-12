@@ -57,7 +57,7 @@ class HysteresisMagnet(Module, ABC):
 
 
 class HysteresisAccelerator(TorchAccelerator):
-    def __init__(self, elements):
+    def __init__(self, elements, allow_duplicates=False):
         """
         Modifies TorchAccelerator class to include tracking of state varaibles
         relevant to hysteresis effects. By default forward calls to the model are
@@ -70,20 +70,30 @@ class HysteresisAccelerator(TorchAccelerator):
         elements
         """
 
-        super(HysteresisAccelerator, self).__init__(elements)
+        super(HysteresisAccelerator, self).__init__(elements, allow_duplicates)
 
-    def calculate_current_transport(self):
-        M_tot = torch.eye(6)
-        for _, ele in self.elements.items():
-            if isinstance(ele, HysteresisMagnet):
-                ele.mode = "current"
-                M = ele()
-                ele.mode = "fantasy"
-            else:
-                M = ele()
+    def calculate_transport(self, current=False):
+        if not current:
+            for _, ele in self.elements.items():
+                if isinstance(ele, HysteresisMagnet):
+                    ele.mode = "current"
+            M = super().calculate_transport()
 
-            M_tot = torch.matmul(M, M_tot)
-        return M_tot
+            for _, ele in self.elements.items():
+                if isinstance(ele, HysteresisMagnet):
+                    ele.mode = "fantasy"
+        else:
+            M = super().calculate_transport()
+
+        return M
+
+    def forward(self, R: Tensor, full=True, current=False):
+        M = self.calculate_transport(current)
+        R_f = self.propagate_beam(M, R)
+        if full:
+            return R_f[-1]
+        else:
+            return R_f
 
     def apply_fields(self, fields_dict: Dict):
         for name, field in fields_dict.items():
