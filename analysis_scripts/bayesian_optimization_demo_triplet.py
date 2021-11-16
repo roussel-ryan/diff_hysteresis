@@ -37,15 +37,15 @@ def optimize(accelerator_model, initial_beam_matrix, apply_fields=False):
     accelerator_model.q2.fantasy_H.data = train_X[0][1]
     accelerator_model.q3.fantasy_H.data = train_X[0][2]
 
-    train_Y = total_beamsize(
-        accelerator_model.forward(initial_beam_matrix)
-    ).reshape(1, 1)
+    train_Y = total_beamsize(accelerator_model.forward(initial_beam_matrix)).reshape(
+        1, 1
+    )
 
     if apply_fields:
         print(f"applying field {train_X[-1]}")
-        accelerator_model.apply_fields({"q1": train_X[-1][0],
-                                        "q2": train_X[-1][1],
-                                        "q3": train_X[-1][2]})
+        accelerator_model.apply_fields(
+            {"q1": train_X[-1][0], "q2": train_X[-1][1], "q3": train_X[-1][2]}
+        )
 
     for i in range(iterations):
         std_trans = Standardize(1)
@@ -69,16 +69,16 @@ def optimize(accelerator_model, initial_beam_matrix, apply_fields=False):
         accelerator_model.q3.fantasy_H.data = candidate[0][2]
 
         # make next measurement
-        bs = total_beamsize(
-            accelerator_model.forward(initial_beam_matrix)
-        ).reshape(1, 1)
+        bs = total_beamsize(accelerator_model.forward(initial_beam_matrix)).reshape(
+            1, 1
+        )
         train_Y = torch.cat((train_Y, bs))
 
         if apply_fields:
             print(f"applying field {train_X[-1]}")
-            accelerator_model.apply_fields({"q1": train_X[-1][0],
-                                            "q2": train_X[-1][1],
-                                            "q3": train_X[-1][2]})
+            accelerator_model.apply_fields(
+                {"q1": train_X[-1][0], "q2": train_X[-1][1], "q3": train_X[-1][2]}
+            )
 
     return train_X, train_Y, gp
 

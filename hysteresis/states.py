@@ -20,11 +20,13 @@ def switch(h, m, T=1e-4):
 def get_states(
     h: torch.Tensor,
     mesh_points: torch.Tensor,
+    current_state: torch.Tensor = None,
+    current_field: torch.Tensor = None,
     tkwargs=None,
     temp=1e-3,
 ):
     """
-    Returns magnetic hysteresis state as an mxnxn tensor, where
+    Returns magnetic hysteresis state as an m x n x n tensor, where
     m is the number of distinct applied magnetic fields. The
     states are initially entirely off, and then updated per
     time step depending on both the most recent applied magnetic
@@ -44,6 +46,8 @@ def get_states(
 
     Parameters
     ----------
+    current_field
+    current_state
     temp
     tkwargs
     mesh_points
@@ -63,20 +67,33 @@ def get_states(
     ):
         raise RuntimeError("applied values are outside of the unit domain")
 
+    assert len(h.shape) == 1
     n_mesh_points = mesh_points.shape[0]
     tkwargs = tkwargs or {}
 
     # list of hysteresis states with initial state set
-    initial_state = torch.ones(n_mesh_points, **tkwargs) * -1.0
+    if current_state is None:
+        initial_state = torch.ones(n_mesh_points, **tkwargs) * -1.0
+        initial_field = torch.zeros(1)
+    else:
+        assert isinstance(current_field, torch.Tensor)
+        assert current_state.shape[-1] == n_mesh_points
+        initial_state = current_state
+        initial_field = current_field
+
     states = []
 
     # loop through the states
-    n_calcs = 0
-    for i in range(0, len(h)):
+    for i in range(len(h)):
         if i == 0:
-            # if the new applied field is greater than the old one, sweep up to
-            # new applied field
-            states += [sweep_up(h[i], mesh_points, initial_state, temp)]
+            # handle initial case
+            if h[0] > initial_field:
+                states += [sweep_up(h[i], mesh_points, initial_state, temp)]
+            elif h[0] < initial_field:
+                states += [sweep_left(h[i], mesh_points, initial_state, temp)]
+            else:
+                states += [initial_state]
+
         elif h[i] > h[i - 1]:
             # if the new applied field is greater than the old one, sweep up to
             # new applied field

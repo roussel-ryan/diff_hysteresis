@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 
+from hysteresis.densities import linear
 from hysteresis.base import TorchHysteresis
 from torchAccelerator.hysteresis import HysteresisAccelerator, HysteresisQuad
 from torchAccelerator.first_order import TorchDrift

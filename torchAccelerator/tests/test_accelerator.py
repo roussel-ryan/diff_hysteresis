@@ -34,8 +34,3 @@ class TestAccelerator:
         M[2, 3] = 1.0
         correct_result = M @ R @ M.T
         assert torch.equal(accel.forward(R, full=False)[1], correct_result)
-
-
-
-
-

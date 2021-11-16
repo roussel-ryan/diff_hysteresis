@@ -13,7 +13,7 @@ class TorchAccelerator(Module):
             if ele.name not in names or allow_duplicates:
                 names += [ele.name]
             else:
-                raise RuntimeError(f'duplicate name {ele.name} found but not allowed')
+                raise RuntimeError(f"duplicate name {ele.name} found but not allowed")
 
         self.elements = {element.name: element for element in elements}
 
@@ -42,7 +42,7 @@ class TorchAccelerator(Module):
 
         """
         if not M.shape[-2:] == torch.Size([6, 6]):
-            raise RuntimeError('last dims of transport matrix must be 6 x 6')
+            raise RuntimeError("last dims of transport matrix must be 6 x 6")
 
         return torch.matmul(M, torch.matmul(R, torch.transpose(M, -2, -1)))
 
