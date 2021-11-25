@@ -1,20 +1,44 @@
 import torch
 
-
 def sweep_up(h, mesh, initial_state, T=1e-2):
     return torch.minimum(
-        initial_state + switch(h, mesh[:, 1], T), torch.ones_like(mesh[:, 1])
+        initial_state + switch(h, mesh[:, 1], T),
+        torch.ones_like(mesh[:, 1])
     )
 
 
 def sweep_left(h, mesh, initial_state, T=1e-2):
     return torch.maximum(
-        initial_state - switch(mesh[:, 0], h, T), torch.ones_like(mesh[:, 0]) * -1.0
+        initial_state - switch(mesh[:, 0], h, T),
+        torch.ones_like(mesh[:, 0]) * -1.0
     )
 
 
 def switch(h, m, T=1e-4):
     return 1.0 + torch.tanh((h - m) / T)
+
+
+def predict_batched_state(h, mesh_points, current_state, current_field):
+    """
+    Speed up optimization by calculating a batched future state given a batch of h
+    values.
+
+    Parameters
+    ----------
+    h
+    mesh_points
+    current_state
+    current_field
+
+    Returns
+    -------
+
+    """
+
+    result = torch.where(torch.greater_equal(h - current_field, torch.zeros(1).to(h)),
+                         sweep_up(h, mesh_points, current_state),
+                         sweep_left(h, mesh_points, current_state))
+    return result
 
 
 def get_states(

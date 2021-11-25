@@ -10,45 +10,29 @@ class HysteresisMagnet(Module, ABC):
     def __init__(self, name, L: Tensor, hysteresis_model):
         Module.__init__(self)
         self.name = name
-        self.history = None
-        self.register_buffer(f"length", Parameter(L))
-        self.register_parameter("fantasy_H", Parameter(-1.0 * torch.ones(1)))
         self.hysteresis_model = hysteresis_model
-        self.mode = "fantasy"
+        self.L = L
 
     def apply_field(self, H: Tensor):
-        if not isinstance(self.history, torch.Tensor):
-            self.history = torch.atleast_1d(H)
-        else:
-            self.history = torch.cat((self.history, torch.atleast_1d(H)))
+        self.hysteresis_model.applied_fields = torch.cat((
+            self.hysteresis_model.applied_fields, H.reshape(1)
+        ))
 
-    def get_transport_matrix(self, h):
-        m = self.hysteresis_model.predict_magnetization(h=torch.atleast_1d(h))
+    def get_transport_matrix(self):
+        m = self.hysteresis_model.predict_magnetization_from_applied_fields()
         m_last = m[-1] if m.shape else m
         return self._calculate_beam_matrix(m_last)
 
     def get_fantasy_transport_matrix(self, h_fantasy):
-        if isinstance(self.history, torch.Tensor):
-            h = torch.cat((self.history, torch.atleast_1d(h_fantasy)))
-        else:
-            h = torch.atleast_1d(h_fantasy)
-        return self.get_transport_matrix(h)
+        m = self.hysteresis_model.predict_magnetization_future(h_fantasy)
+        return self._calculate_beam_matrix(m)
 
-    @property
-    def M(self) -> Tensor:
-        """get current beam matrix"""
-        self.mode = "current"
-        matr = self.get_transport_matrix(self.history)
-        self.mode = "fantasy"
-        return matr
+    def get_magnetization_history(self):
+        return self.hysteresis_model.predict_magnetization_from_applied_fields()
 
-    @property
-    def state(self) -> Tensor:
-        return self.history[-1]
-
-    def forward(self) -> Tensor:
-        """predict future beam matrix for optimization"""
-        return self.get_fantasy_transport_matrix(self.fantasy_H)
+    def forward(self):
+        """ Returns the current transport matrix"""
+        return self.get_transport_matrix()
 
     @abstractmethod
     def _calculate_beam_matrix(self, m: Tensor):
@@ -71,31 +55,50 @@ class HysteresisAccelerator(TorchAccelerator):
         """
 
         super(HysteresisAccelerator, self).__init__(elements, allow_duplicates)
+        self.fantasy = False
 
-    def calculate_transport(self, current=False):
-        if not current:
-            for _, ele in self.elements.items():
-                if isinstance(ele, HysteresisMagnet):
-                    ele.mode = "current"
-            M = super().calculate_transport()
+        self.hysteresis_element_names = []
+        for name, ele in self.elements.items():
+            if isinstance(ele, HysteresisMagnet):
+                self.hysteresis_element_names += [name]
 
-            for _, ele in self.elements.items():
-                if isinstance(ele, HysteresisMagnet):
-                    ele.mode = "fantasy"
+        # create parameters for optimization
+        for name in self.hysteresis_element_names:
+            self.register_parameter(name + '_H', Parameter(torch.zeros(1)))
+
+    def calculate_fantasy_transport(self, h_fantasy_dict: Dict):
+        M_i = torch.eye(6)
+        M = [M_i]
+        for name, ele in self.elements.items():
+            if isinstance(ele, HysteresisMagnet):
+                element_matrix = ele.get_fantasy_transport_matrix(
+                    self.get_parameter(name + '.H')
+                )
+            else:
+                element_matrix = ele.forward()
+
+            M += [torch.matmul(element_matrix, M[-1])]
+
+        return torch.cat([m.unsqueeze(0) for m in M], dim=0)
+
+    def forward(self, R: Tensor, full=True, fantasy=False):
+        if fantasy:
+            h_fantasy_dict = {}
+            M = self.calculate_fantasy_transport(h_fantasy_dict)
         else:
-            M = super().calculate_transport()
+            M = self.calculate_transport()
 
-        return M
-
-    def forward(self, R: Tensor, full=True, current=False):
-        M = self.calculate_transport(current)
         R_f = self.propagate_beam(M, R)
+
         if full:
             return R_f[-1]
         else:
             return R_f
 
     def apply_fields(self, fields_dict: Dict):
+        for key in fields_dict:
+            assert key in list(self.elements)
+
         for name, field in fields_dict.items():
             self.elements[name].apply_field(field)
 
@@ -103,7 +106,7 @@ class HysteresisAccelerator(TorchAccelerator):
 class HysteresisQuad(HysteresisMagnet):
     def __init__(self, name, length, hysteresis_model, scale=1.0):
         super(HysteresisQuad, self).__init__(name, length, hysteresis_model)
-        self.quad_model = TorchQuad("", length, torch.ones(1))
+        self.quad_model = TorchQuad("", length, None)
         self.quad_model.K1.requires_grad = False
         self.quad_model.L.requires_grad = False
         self.scale = scale

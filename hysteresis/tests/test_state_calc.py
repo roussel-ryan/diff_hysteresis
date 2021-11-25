@@ -3,7 +3,8 @@ import torch
 from hysteresis.base import TorchHysteresis
 from hysteresis.linearized import LinearizedHysteresis
 from hysteresis.meshing import create_triangle_mesh
-from hysteresis.states import get_states, switch, sweep_up, sweep_left
+from hysteresis.states import get_states, switch, sweep_up, sweep_left, \
+    predict_batched_state
 import matplotlib.pyplot as plt
 
 
@@ -67,3 +68,21 @@ class TestStateCalc:
         h = torch.tensor((-0.5, 0.75, 0.4, 0.5))
         with pytest.raises(RuntimeError):
             states = get_states(h, mesh_points=mesh)
+
+    def test_batched(self):
+        mesh = torch.tensor(create_triangle_mesh(0.1))
+        current_state = torch.ones(mesh.shape[0]) * -1.0
+        current_field = -0.01
+        h = torch.linspace(0.0, 1.0, 20, requires_grad=True)
+        out = predict_batched_state(h.reshape(20, 1, 1),
+                                    mesh,
+                                    current_state,
+                                    current_field)
+        out[0][0][0].backward()
+        assert not torch.any(torch.isnan(h.grad))
+
+
+        # idx = 10
+        # plt.tripcolor(*mesh.T, out[idx][0].detach())
+        # plt.axhline(h[idx].detach())
+        # plt.show()

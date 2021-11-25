@@ -107,10 +107,11 @@ class TorchQuad(Module):
             K1 = K1
             flip = False
         else:
-            K1 = K1 + torch.tensor(1.0e-10)
-            flip = False
+            M = torch.eye(6)
+            M[0, 1] = self.L
+            M[2, 3] = self.L
+            return M
 
-        # clip to make sure we don't run into divide by zero errors
         k = torch.sqrt(K1)
 
         kl = self.L * k
