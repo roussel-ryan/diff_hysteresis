@@ -13,7 +13,7 @@ def train_torch(model, magnetization, n_steps, lr=0.1):
     loss_track = []
     for i in range(n_steps):
         optimizer.zero_grad()
-        output = model.predict_magnetization()
+        output = model.predict_magnetization_from_applied_fields()
         loss = loss_fn(magnetization, output)
         loss.backward(retain_graph=True)
 
