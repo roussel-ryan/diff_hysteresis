@@ -1,32 +1,32 @@
+import matplotlib.pyplot as plt
 import pyro
 import torch
 from pyro.infer import SVI, Trace_ELBO
-from pyro.infer.autoguide import AutoMultivariateNormal, AutoDelta
+from pyro.infer.autoguide import AutoMultivariateNormal, AutoDelta, AutoNormal
 
 
-def train_torch(model, magnetization, n_steps, lr=0.1):
-    def loss_fn(m, m_pred):
-        return torch.sum((m - m_pred) ** 2)
-
+def train_MSE(model, train_x, train_y, n_steps, lr=0.1, atol=1.0e-8):
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     loss_track = []
     for i in range(n_steps):
         optimizer.zero_grad()
-        output = model.predict_magnetization_from_applied_fields()
-        loss = loss_fn(magnetization, output)
-        loss.backward(retain_graph=True)
+        output = model(train_x)
+        loss = torch.nn.MSELoss()(train_y, output)
+        loss.backward()
+
+        if loss < atol:
+            break
 
         loss_track += [loss]
         optimizer.step()
-        if i % 100 == 0:
+        if i % 1000 == 0:
             print(i)
 
     return torch.tensor(loss_track)
 
-
 def train_bayes(h, m, model, num_steps, guide=None, initial_lr=0.001, gamma=0.1):
-    guide = guide or AutoMultivariateNormal(model)
+    guide = guide or AutoNormal(model)
 
     lrd = gamma ** (1 / num_steps)
     optim = pyro.optim.ClippedAdam({"lr": initial_lr, "lrd": lrd})
@@ -47,6 +47,7 @@ def train_bayes(h, m, model, num_steps, guide=None, initial_lr=0.001, gamma=0.1)
 def map_bayes(h, m, model, num_steps, initial_lr=0.001, gamma=0.1):
     """maximum a posteriori point estimation of parameters"""
     guide = AutoDelta(model)
+
     return train_bayes(h, m, model, num_steps, guide, initial_lr, gamma)
 
 

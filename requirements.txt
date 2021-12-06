@@ -4,3 +4,5 @@ pytest>=6.2.5
 botorch>=0.4.0
 gpytorch>=1.5.0
 numpy>=1.21.1
+
+pygmsh>=7.1.12

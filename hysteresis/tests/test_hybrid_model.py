@@ -23,7 +23,7 @@ class TestHysteresisGP:
         H = TorchHysteresis(train_x, trainable=False, mesh_scale=0.1, h_min=-1.0)
         H.hysterion_density = density_function(H.mesh_points)
 
-        train_m = H.predict_magnetization().detach()
+        train_m = H.predict_magnetization_from_applied_fields().detach()
         train_y = train_m ** 2
 
         hgp = HybridGP(train_x.reshape(-1, 1), train_y.reshape(-1, 1), H)
@@ -39,10 +39,10 @@ class TestHysteresisGP:
             mean = post.mean.flatten()
             std = torch.sqrt(post.variance).flatten()
 
-        #fig, ax = plt.subplots()
-        #ax.plot(train_x, train_y.detach(), 'o')
-        #ax.plot(test_x, mean, 'C1')
-        # ax.fill_between(test_x, mean - std, mean + std, alpha=0.25, fc='C1')
+        fig, ax = plt.subplots()
+        ax.plot(train_x, train_y.detach(), 'o')
+        ax.plot(test_x, mean, 'C1')
+        ax.fill_between(test_x.flatten(), mean - std, mean + std, alpha=0.25, fc='C1')
         plt.show()
 
     def test_training_ND(self):

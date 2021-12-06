@@ -25,8 +25,10 @@ class BayesianHysteresis(PyroModule):
         self.kernel_function = kernel_function
 
         self.density = PyroSample(self.get_prior_distribution())
-        self.scale = PyroSample(dist.Normal(0.5, 0.1))
-        self.offset = PyroSample(dist.Normal(0.5, 0.1))
+        self.scale = PyroSample(dist.Normal(0.5, 0.5))
+        self.offset = PyroSample(dist.Normal(0.5, 0.5))
+        self.slope = PyroSample(dist.Normal(0.5, 0.5))
+
 
     def get_prior_distribution(self) -> dist.Distribution:
         """
@@ -64,9 +66,22 @@ class BayesianHysteresis(PyroModule):
         # return the prior distribution
         return dist.MultivariateNormal(prior_mean, covariance_matrix=covariance_matrix)
 
-    def forward(self, X: Tensor, Y: Tensor = None) -> Tensor:
-        mean = self.hysteresis_model.predict_magnetization(
-            h=X, density_vector=self.density, offset=self.offset, scale=self.scale
+    def train(self, **kwargs):
+        self.hysteresis_model.train(**kwargs)
+
+    def future(self):
+        self.hysteresis_model.future()
+
+    def forward(
+            self, X: Tensor,
+            Y: Tensor = None
+    ) -> Tensor:
+        mean = self.hysteresis_model.forward(
+            X,
+            density_vector=self.density,
+            offset=self.offset,
+            scale=self.scale,
+            slope=self.slope
         )
 
         # condition on observations

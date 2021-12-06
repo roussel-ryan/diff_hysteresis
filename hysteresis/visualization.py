@@ -1,4 +1,6 @@
 import matplotlib.pyplot as plt
+import torch
+
 from hysteresis.base import TorchHysteresis
 
 
@@ -25,7 +27,7 @@ def plot_bayes_predicition(summary, m, baseline=False):
     upper = y["mean"] + y["std"]
     lower = y["mean"] - y["std"]
 
-    if baseline:
+    if isinstance(baseline, torch.Tensor):
         mean = mean - m
         upper = upper - m
         lower = lower - m

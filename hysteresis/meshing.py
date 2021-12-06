@@ -3,6 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+def constant_mesh_size(x, y, mesh_scale):
+    return mesh_scale
+
+
 def default_mesh_size(x, y, mesh_scale):
     return mesh_scale * (0.2 * (np.abs(x - y)) + 0.05)
 
@@ -12,7 +16,7 @@ def exponential_mesh(x, y, mesh_scale, min_density=0.001, ls=0.05):
 
 
 def create_triangle_mesh(mesh_scale, mesh_density_function=None):
-    mesh_density_function = mesh_density_function or default_mesh_size
+    mesh_density_function = mesh_density_function or constant_mesh_size
     with pygmsh.geo.Geometry() as geom:
         geom.add_polygon(
             [

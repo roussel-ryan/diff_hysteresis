@@ -103,7 +103,7 @@ class HybridGP(Model):
         train_m = []
         # set applied fields and calculate magnetization for training data
         for idx, hyst_model in enumerate(self.hysteresis_models):
-            train_m += [hyst_model.predict_magnetization_future(X[..., idx])]
+            train_m += [hyst_model.predict_magnetization_next(X[..., idx])]
         train_m = torch.cat([ele for ele in train_m], dim=1)
 
         # calculate posterior and un-transform standardization if requested

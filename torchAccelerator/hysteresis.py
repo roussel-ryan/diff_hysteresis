@@ -24,7 +24,7 @@ class HysteresisMagnet(Module, ABC):
         return self._calculate_beam_matrix(m_last)
 
     def get_fantasy_transport_matrix(self, h_fantasy):
-        m = self.hysteresis_model.predict_magnetization_future(h_fantasy)
+        m = self.hysteresis_model.predict_magnetization_next(h_fantasy)
         return self._calculate_beam_matrix(m)
 
     def get_magnetization_history(self):

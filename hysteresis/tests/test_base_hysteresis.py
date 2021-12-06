@@ -1,3 +1,4 @@
+import matplotlib.pyplot as plt
 import torch
 from hysteresis.base import TorchHysteresis
 from hysteresis.linearized import LinearizedHysteresis
@@ -45,3 +46,14 @@ class TestBaseHysteresis:
         print(num_grad)
 
         assert not torch.isnan(h_test.grad)
+
+    def test_future_prediction(self):
+        h_data = torch.linspace(0.0, 0.5, 10)
+        H = TorchHysteresis(mesh_scale=0.1)
+        H.applied_fields = h_data
+
+        h_test = torch.linspace(0.6, 1.0, 5)
+        m_future = H.predict_magnetization_future(h_test)
+
+        m_correct = torch.tensor([-0.0212, 0.2922, 0.6162, 0.9528, 1.2987]).double()
+        assert torch.all(torch.isclose(m_future.detach(), m_correct, rtol=0.01))
