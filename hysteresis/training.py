@@ -4,9 +4,13 @@ import torch
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoMultivariateNormal, AutoDelta, AutoNormal
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def train_MSE(model, train_x, train_y, n_steps, lr=0.1, atol=1.0e-8):
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=1e-5)
 
     loss_track = []
     for i in range(n_steps):
@@ -21,9 +25,10 @@ def train_MSE(model, train_x, train_y, n_steps, lr=0.1, atol=1.0e-8):
         loss_track += [loss]
         optimizer.step()
         if i % 1000 == 0:
-            print(i)
+            logger.debug(i)
 
     return torch.tensor(loss_track)
+
 
 def train_bayes(h, m, model, num_steps, guide=None, initial_lr=0.001, gamma=0.1):
     guide = guide or AutoNormal(model)
@@ -39,7 +44,7 @@ def train_bayes(h, m, model, num_steps, guide=None, initial_lr=0.001, gamma=0.1)
         loss = svi.step(h, m)
         loss_trace += [loss]
         if j % 100 == 0:
-            print("[iteration %04d] loss: %.4f" % (j + 1, loss))
+            logger.debug("[iteration %04d] loss: %.4f" % (j + 1, loss))
 
     return guide, torch.tensor(loss_trace)
 

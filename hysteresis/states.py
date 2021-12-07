@@ -1,5 +1,6 @@
 import torch
 
+
 def sweep_up(h, mesh, initial_state, T=1e-2):
     return torch.minimum(
         initial_state + switch(h, mesh[:, 1], T),

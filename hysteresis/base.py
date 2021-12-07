@@ -4,141 +4,164 @@ from torch import Tensor
 from typing import Dict, Callable
 from .meshing import create_triangle_mesh, default_mesh_size
 from .states import get_states, predict_batched_state
+from .transform import HysteresisTransform
 
 
-class TorchHysteresis(Module):
-    states = None
-    _old_h = None
-    _old_states = None
+class BaseHysteresis(Module):
+    _mode = 'train'
 
     def __init__(
             self,
-            h_train: Tensor = None,
-            mesh_scale: float = 1.0,
-            temp: float = 1e-3,
+            train_h: Tensor = None,
+            train_m: Tensor = None,
             trainable: bool = True,
             tkwargs: Dict = None,
+            mesh_scale: float = 1.0,
             mesh_density_function: Callable = None,
-            h_min: float = 0.0,
-            h_max: float = 1.0,
+            polynomial_degree: int = 1,
+            temp: float = 1e-2,
     ):
-        """
-        Torch module used to numerically calculate hysteresis using a
-        Preisach hysteresis model while preserving gradient information.
+        super(BaseHysteresis, self).__init__()
 
-        Parameters
-        ----------
-        h_train : torch.Tensor
-            A 1 x d-dim tensor that denotes a sequence of applied fields at arbitrary
-            time steps.
-
-        mesh_scale : float, default = 1.0
-            Scaling of triangular mesh used to discretize beta-alpha hysterion
-            density space. Default value results in approximately 110 grid points.
-
-        trainable : bool, default = True
-            If True, register the hysterion density values, bulk offset and bulk
-            scale at trainable torch vectors.
-
-        tkwargs : Dict, optional
-            Modifies the data type and device of all tensors used internally.
-            Default data type is torch.double and default device is 'cpu'.
-
-        """
-
-        super(TorchHysteresis, self).__init__()
-        self.temp = temp
         self.tkwargs = tkwargs or {}
         self.tkwargs.update({"dtype": torch.double, "device": "cpu"})
 
-        self.trainable = trainable
-
         # generate mesh grid on 2D normalized domain [[0,1],[0,1]]
+        self.temp = temp
         self.mesh_scale = mesh_scale
         self.mesh_points = torch.tensor(
             create_triangle_mesh(mesh_scale, mesh_density_function), **self.tkwargs
         )
 
-        # initialize protected applied fields tensor
-        self._applied_fields = torch.zeros(1, **self.tkwargs)
-        self.states = torch.ones((1, self.mesh_points.shape[0]), **self.tkwargs) * -1.0
+        # initialize trainable parameters
+        density = torch.zeros(len(self.mesh_points))
+        offset = torch.zeros(1)
+        scale = torch.ones(1)
+        slope = torch.zeros(1)
+        param_vals = [density, offset, scale, slope]
+        param_names = [
+            "_raw_hysterion_density",
+            "offset",
+            "scale",
+            "slope"
+        ]
 
-        # generate hysterion density vector, offset and scale parameters
-        hyst_density = torch.zeros(self.mesh_points.shape[0], **self.tkwargs)
-        offset = torch.zeros(1, **self.tkwargs)
-        scale = torch.ones(1, **self.tkwargs)
-        slope = torch.ones(1, **self.tkwargs)
+        self.trainable = trainable
+        for param_name, param_val in zip(param_names, param_vals):
+            if self.trainable:
+                self.register_parameter(param_name, Parameter(param_val))
 
-        self._mode = 'train'
+            else:
+                self.register_buffer(param_name, Parameter(param_val))
 
-        # if trainable register the parameters
-        if self.trainable:
-            self.register_parameter("_raw_hyst_density", Parameter(hyst_density))
-            self.register_parameter("offset", Parameter(offset))
-            self.register_parameter("scale", Parameter(scale))
-            self.register_parameter("slope", Parameter(slope))
+        # if provided create normalization transform and set magnetization history
+        self.polynomial_degree = polynomial_degree
+        self.set_history(train_h, train_m)
 
-        else:
-            # self.register_buffer("_raw_hyst_density", Parameter(hyst_density))
-            # self.register_buffer("offset", Parameter(offset))
-            # self.register_buffer("scale", Parameter(scale))
-            self._raw_hyst_density = hyst_density
-            self.offset = offset
-            self.scale = scale
-            self.slope = slope
+    def set_history(self, history_h, history_m, retrain_normalization=True):
+        """ set historical state values and recalculate hysterion states"""
+        if retrain_normalization:
+            self.transformer = HysteresisTransform(
+                history_h, history_m,
+                self.polynomial_degree
+            )
 
-        if h_train is not None:
-            # normalize training data
-            self.h_min = torch.min(h_train)
-            self.h_max = torch.max(h_train)
-            self.applied_fields = h_train
+        _history_h, _history_m = self.transformer.transform(history_h, history_m)
+        self.register_buffer('_history_h', _history_h)
+        self.register_buffer('_history_m', _history_m)
 
-        else:
-            self.h_min = h_min
-            self.h_max = h_max
-            self.applied_fields = torch.zeros(1)
-
-        self.hysterion_density = torch.ones_like(hyst_density) * 0.1
+        # recalculate states
+        _states = get_states(self._history_h, self.mesh_points, temp=self.temp)
+        self.register_buffer('_states', _states)
 
     @property
     def hysterion_density(self):
-        return torch.nn.Softplus()(self._raw_hyst_density)
+        return torch.nn.Softplus()(self._raw_hysterion_density)
 
     @hysterion_density.setter
     def hysterion_density(self, value: Tensor):
-        if self.trainable:
-            self._raw_hyst_density = Parameter(
-                torch.log(torch.exp(value.clone()) - 1).to(**self.tkwargs)
+        self._raw_hysterion_density = Parameter(
+            torch.log(torch.exp(value.clone()) - 1).to(**self.tkwargs)
+        )
+
+    def _predict_normalized_magnetization(self, states, h):
+        m = torch.sum(self.hysterion_density * states, dim=-1) / torch.sum(
+            self.hysterion_density
+        )
+        return self.scale * m + self.offset + h * self.slope
+
+    def get_negative_saturation(self):
+        return self.transformer.untransform(torch.zeros(1), -self.scale +
+                                            self.offset)[1]
+
+    def forward(self, x: Tensor, **kwargs):
+
+        return_norm = kwargs.get('return_norm', False)
+        if self._mode == 'train':
+            assert torch.all(torch.isclose(
+                x,
+                self.transformer.untransform(self._history_h)[0]
+            )), "must train on history fields"
+            states = self._states
+            return self._predict_normalized_magnetization(states, self._history_h)
+
+        elif self._mode == 'future':
+            norm_h, _ = self.transformer.transform(x)
+            states = get_states(
+                norm_h,
+                self.mesh_points,
+                current_state=self._states[-1],
+                current_field=self._history_h[-1],
+                tkwargs=self.tkwargs
             )
+
+            if return_norm:
+                return self._predict_normalized_magnetization(
+                    states, norm_h
+                )
+            else:
+                return self.transformer.untransform(
+                    norm_h,
+                    self._predict_normalized_magnetization(
+                        states, norm_h
+                    )
+                )[1]
+
+        elif self._mode == 'next':
+            if x.shape[1:] != torch.Size([1, 1]):
+                raise ValueError(f'shape of x must be [-1, 1, 1] for next mode, '
+                                 'current shape is {x.shape}')
+            norm_h, _ = self.transformer.transform(x)
+
+            states = predict_batched_state(
+                norm_h,
+                self.mesh_points,
+                current_state=self._states[-1],
+                current_field=self._history_h[-1],
+            )
+
+            norm_h = norm_h.reshape(-1, states.shape[-2])
+            norm_m = self._predict_normalized_magnetization(
+                    states, norm_h
+                ).reshape(-1, 1, 1)
+            if return_norm:
+                return norm_m
+            else:
+                return self.transformer.untransform(
+                    norm_h,
+                    norm_m
+                )[1]
         else:
-            self._raw_hyst_density = torch.log(torch.exp(value.clone()) - 1).to(
-                **self.tkwargs
-            )
+            raise ValueError(f'mode:`{self._mode}` not accepted')
 
     @property
-    def applied_fields(self):
-        return self.unnormalize_h(self._applied_fields)
+    def history_h(self):
+        return self.transformer.untransform(self._history_h)
 
-    @applied_fields.setter
-    def applied_fields(self, value: Tensor):
-        new_applied_fields = self.normalize_h(value.to(**self.tkwargs))
-        if not torch.equal(new_applied_fields, self._applied_fields):
-            self._applied_fields = new_applied_fields.clone()
-            self.update_states(self._applied_fields)
-
-    def get_mesh_size(self, x, y):
-        return default_mesh_size(x, y, self.mesh_scale)
-
-    def normalize_h(self, h):
-        return (h - self.h_min) / (self.h_max - self.h_min)
-
-    def unnormalize_h(self, h):
-        return h * (self.h_max - self.h_min) + self.h_min
-
-    def update_states(self, h: torch.Tensor):
-        self.states = get_states(
-            h, self.mesh_points, tkwargs=self.tkwargs, temp=self.temp
-        )
+    @property
+    def history_m(self):
+        _, m = self.transformer.untransform(self._history_h, self._history_m)
+        return m
 
     def train(self, **kwargs):
         self._mode = 'train'
@@ -148,128 +171,3 @@ class TorchHysteresis(Module):
 
     def next(self):
         self._mode = 'next'
-
-    def _get_model_parameters(self, density_vector, scale, offset, slope):
-        # get the density vector from the raw version
-        if not isinstance(density_vector, torch.Tensor):
-            hyst_density_vector = torch.nn.Softplus()(self._raw_hyst_density)
-        else:
-            hyst_density_vector = torch.nn.Softplus()(density_vector)
-
-        s = scale if isinstance(scale, torch.Tensor) else self.scale
-        o = offset if isinstance(offset, torch.Tensor) else self.offset
-        slope = slope if isinstance(slope, torch.Tensor) else self.slope
-
-        return hyst_density_vector, s, o, slope
-
-    def get_negative_saturation(
-            self, density_vector: Tensor = None, scale: Tensor = None,
-            offset: Tensor = None, slope: Tensor = None
-    ):
-        """get the nagetive stautration magnetization given a set of parameters
-        internal or specified via argument"""
-        # get the density vector from the raw version
-        if density_vector is None:
-            hyst_density_vector = torch.nn.Softplus()(self._raw_hyst_density)
-        else:
-            hyst_density_vector = torch.nn.Softplus()(density_vector)
-
-        s = scale if scale is not None else self.scale
-        o = offset if offset is not None else self.offset
-
-        neg_sat_state = (
-                torch.ones((1, self.mesh_points.shape[0]), **self.tkwargs) * -1.0
-        )
-        m = torch.sum(hyst_density_vector * neg_sat_state, dim=-1) / torch.sum(
-            hyst_density_vector
-        )
-        return s * m + o
-
-    def forward(self, x: Tensor, **kwargs):
-        if self._mode == 'train':
-            assert torch.equal(x, self.applied_fields), "must train on applied fields"
-            return self.predict_magnetization_from_applied_fields(**kwargs)
-        elif self._mode == 'future':
-            return self.predict_magnetization_future(x, **kwargs)
-        elif self._mode == 'next':
-            return self.predict_magnetization_next(x, **kwargs)
-        else:
-            raise ValueError(f'mode:`{self._mode}` not accepted')
-
-    def predict_magnetization_from_applied_fields(
-            self,
-            density_vector: Tensor = None,
-            scale: Tensor = None,
-            offset: Tensor = None,
-            slope: Tensor = None
-    ):
-        """ Predict magnetization from model regression, ie. from training data"""
-        hyst_vec, s, o, slope = self._get_model_parameters(density_vector, scale,
-                                                           offset, slope)
-        if isinstance(self.states, torch.Tensor):
-            states = self.states
-            applied_fields = self._applied_fields
-
-            # do numerical integration
-            m = torch.sum(hyst_vec * states, dim=-1) / torch.sum(
-                hyst_vec
-            )
-            return s * m + o + applied_fields * slope
-
-        else:
-            return self.get_negative_saturation(density_vector, scale, offset, slope)[0]
-
-    def predict_magnetization_future(
-            self,
-            h: Tensor,
-            density_vector: Tensor = None,
-            scale: Tensor = None,
-            offset: Tensor = None,
-            slope: Tensor = None
-    ):
-        """Predict future magnetization sequence (slowly)"""
-        hyst_vec, s, o, slope = self._get_model_parameters(density_vector, scale,
-                                                           offset, slope)
-        normed_h_new = self.normalize_h(h).to(**self.tkwargs)
-
-        states = get_states(
-            h,
-            self.mesh_points,
-            current_state=self.states[-1],
-            current_field=self._applied_fields[-1],
-            tkwargs=self.tkwargs
-        )
-
-        # do numerical integration
-        m = torch.sum(hyst_vec * states, dim=-1) / torch.sum(
-            hyst_vec
-        )
-        return s * m + o + normed_h_new * slope
-
-    def predict_magnetization_next(
-            self,
-            h: Tensor,
-            density_vector: Tensor = None,
-            scale: Tensor = None,
-            offset: Tensor = None,
-            slope: Tensor = None
-    ):
-        """Predict next magnetization given a single field value quickly for
-        optimization"""
-        hyst_vec, s, o, slope = self._get_model_parameters(density_vector, scale,
-                                                           offset,
-                                                           slope)
-
-        # return predicted magnetization for each element of h_new
-        normed_h_new = self.normalize_h(h.reshape(-1, 1, 1)).to(**self.tkwargs)
-
-        states = predict_batched_state(
-            normed_h_new,
-            self.mesh_points,
-            self.states[-1],
-            self._applied_fields[-1]
-        )
-
-        # do numerical integration
-        m = torch.sum(hyst_vec * states, dim=-1) / torch.sum(hyst_vec)
-        return s * m + o + normed_h_new * slope
