@@ -1,5 +1,5 @@
-from typing import Callable
-
+from typing import Callable, Dict
+from .base import BaseHysteresis
 import pyro
 import pyro.distributions as dist
 import pyro.infer
@@ -9,80 +9,51 @@ from pyro.nn import PyroModule, PyroSample
 from torch import Tensor
 
 
-class BayesianHysteresis(PyroModule):
+class BayesianHysteresis(BaseHysteresis, PyroModule):
     def __init__(
-        self,
-        hysteresis_model,
-        noise: float = 0.01,
-        prior_function: Callable = None,
-        kernel_function: Callable = None,
-    ) -> None:
-        super(BayesianHysteresis, self).__init__()
+            self,
+            train_h: Tensor = None,
+            train_m: Tensor = None,
+            trainable: bool = True,
+            tkwargs: Dict = None,
+            mesh_scale: float = 1.0,
+            mesh_density_function: Callable = None,
+            polynomial_degree: int = 1,
+            temp: float = 1e-2,
+            noise: float = 1e-2
+    ):
+        super(BayesianHysteresis, self).__init__(
+            train_h,
+            train_m,
+            trainable,
+            tkwargs,
+            mesh_scale,
+            mesh_density_function,
+            polynomial_degree,
+            temp=temp
+        )
 
-        self.hysteresis_model = hysteresis_model
         self.noise = noise
-        self.prior_function = prior_function
-        self.kernel_function = kernel_function
 
-        self.density = PyroSample(self.get_prior_distribution())
-        self.scale = PyroSample(dist.Normal(0.5, 0.5))
-        self.offset = PyroSample(dist.Normal(0.5, 0.5))
-        self.slope = PyroSample(dist.Normal(0.5, 0.5))
-
-
-    def get_prior_distribution(self) -> dist.Distribution:
-        """
-        Use prior and kernel functions to specify a distribution for the density vector
-
-        Returns
-        -------
-
-        """
-        n_mesh_points = self.hysteresis_model.mesh_points.shape[0]
-
-        # use prior function if given
-        if self.prior_function is not None:
-            prior_mean = self.prior_function(self.hysteresis_model)
-            assert (
-                prior_mean.shape[0] == n_mesh_points
-            ), "prior function used does not match number of mesh points"
-        else:
-            prior_mean = torch.zeros(n_mesh_points, **self.hysteresis_model.tkwargs)
-
-        # use correlations if function given
-        if self.kernel_function is not None:
-            covariance_matrix = self.kernel_function(self.hysteresis_model)
-            assert (
-                covariance_matrix.shape[0] == covariance_matrix.shape[1]
-            ), "covariance matrix must be square"
-            assert (
-                covariance_matrix.shape[0] == n_mesh_points
-            ), "covariance matrix size must match mesh points"
-        else:
-            covariance_matrix = torch.eye(
-                n_mesh_points, **self.hysteresis_model.tkwargs
+        if self.n_mesh_points > 1000:
+            raise RuntimeWarning(
+                f'More than 1000 mesh points ({self.n_mesh_points}), '
+                f'may slow down calculations significantly'
             )
 
-        # return the prior distribution
-        return dist.MultivariateNormal(prior_mean, covariance_matrix=covariance_matrix)
-
-    def train(self, **kwargs):
-        self.hysteresis_model.train(**kwargs)
-
-    def future(self):
-        self.hysteresis_model.future()
-
-    def forward(
-            self, X: Tensor,
-            Y: Tensor = None
-    ) -> Tensor:
-        mean = self.hysteresis_model.forward(
-            X,
-            density_vector=self.density,
-            offset=self.offset,
-            scale=self.scale,
-            slope=self.slope
+        # add priors to module params
+        self._raw_hysterion_density = PyroSample(
+            dist.MultivariateNormal(
+                torch.zeros(len(self.mesh_points), **self.tkwargs),
+                covariance_matrix=torch.eye(len(self.mesh_points), **self.tkwargs)
+            )
         )
+        self.offset = PyroSample(dist.Normal(0.0, 0.5))
+        self.scale = PyroSample(dist.Normal(0.0, 0.5))
+        self.slope = PyroSample(dist.Normal(0.0, 0.5))
+
+    def forward(self, X: Tensor, Y: Tensor = None, return_real: bool = False):
+        mean = super().forward(X, return_real=return_real)
 
         # condition on observations
         with pyro.plate("data", len(X)):

@@ -30,7 +30,9 @@ def train_MSE(model, train_x, train_y, n_steps, lr=0.1, atol=1.0e-8):
     return torch.tensor(loss_track)
 
 
-def train_bayes(h, m, model, num_steps, guide=None, initial_lr=0.001, gamma=0.1):
+def train_bayes(model, num_steps, guide=None, initial_lr=0.001, gamma=0.1):
+    assert model.mode == 'regression'
+
     guide = guide or AutoNormal(model)
 
     lrd = gamma ** (1 / num_steps)
@@ -41,7 +43,7 @@ def train_bayes(h, m, model, num_steps, guide=None, initial_lr=0.001, gamma=0.1)
     loss_trace = []
     for j in range(num_steps):
         # calculate the loss and take a gradient step
-        loss = svi.step(h, m)
+        loss = svi.step(model.history_h, model._history_m)
         loss_trace += [loss]
         if j % 100 == 0:
             logger.debug("[iteration %04d] loss: %.4f" % (j + 1, loss))
@@ -49,15 +51,15 @@ def train_bayes(h, m, model, num_steps, guide=None, initial_lr=0.001, gamma=0.1)
     return guide, torch.tensor(loss_trace)
 
 
-def map_bayes(h, m, model, num_steps, initial_lr=0.001, gamma=0.1):
+def map_bayes(model, num_steps, initial_lr=0.001, gamma=0.1):
     """maximum a posteriori point estimation of parameters"""
     guide = AutoDelta(model)
 
-    return train_bayes(h, m, model, num_steps, guide, initial_lr, gamma)
+    return train_bayes(model, num_steps, guide, initial_lr, gamma)
 
 
-def mle_bayes(h, m, model, num_steps, initial_lr=0.001, gamma=0.1):
+def mle_bayes(model, num_steps, initial_lr=0.001, gamma=0.1):
     def empty_guide(X, Y):
         pass
 
-    return train_bayes(h, m, model, num_steps, empty_guide, initial_lr, gamma)
+    return train_bayes(model, num_steps, empty_guide, initial_lr, gamma)

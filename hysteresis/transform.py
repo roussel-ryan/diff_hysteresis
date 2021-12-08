@@ -12,9 +12,11 @@ class HysteresisTransform(Module):
     _trained_m = False
     _trained_h = False
 
-    def __init__(self, train_h, train_m=None, polynomial_degree=5):
+    def __init__(self, train_h, train_m=None, polynomial_degree=5,
+                 polynomial_fit_iterations=3000):
         super(HysteresisTransform, self).__init__()
         self.polynomial_degree = polynomial_degree
+        self.polynomial_fit_iterations = polynomial_fit_iterations
         if isinstance(train_m, torch.Tensor):
             self.update_all(train_h, train_m)
         else:
@@ -27,7 +29,8 @@ class HysteresisTransform(Module):
     def update_fit(self, train_h, train_m):
         """ do polynomial fitting without normalizing train_h"""
         self.poly_fit = Polynomial(self.polynomial_degree)
-        train_MSE(self.poly_fit, train_h, train_m, 2000)
+        train_MSE(self.poly_fit, train_h, train_m, self.polynomial_fit_iterations)
+        self.poly_fit.requires_grad_(False)
 
     def update_h_normalize(self, train_h):
         self._min_h = torch.min(train_h)
@@ -67,14 +70,14 @@ class HysteresisTransform(Module):
 
     def _untransform_h(self, hn):
         if self._trained_h:
-            return hn * (self._max_h - self._min_h)
+            return hn * (self._max_h - self._min_h) + self._min_h
         else:
             raise RuntimeError('h transformation not trained yet')
 
     def _untransform_m(self, hn, mn):
         if self._trained_m:
             fit = self.poly_fit(self._untransform_h(hn))
-            return self._scale_m * mn + fit + self._offset_m
+            return self._scale_m * mn + fit.reshape(hn.shape) + self._offset_m
         else:
             raise RuntimeError('m transformation not trained yet')
 

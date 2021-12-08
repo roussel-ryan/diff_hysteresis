@@ -14,14 +14,17 @@ def summary(samples):
     return site_stats
 
 
-def predict(h, model, guide):
+def predict(h, model, guide, num_samples=500):
     predictive = Predictive(
         model,
         guide=guide,
-        num_samples=500,
-        return_sites=["_RETURN", "obs", "density", "scale", "offset"],
+        num_samples=num_samples,
+        return_sites=["_RETURN", "obs", "_raw_hysterion_density", "scale", "offset",
+                      "slope"],
     )
 
-    samples = predictive(h)
+    samples = predictive(h, return_real=True)
+    samples['density'] = torch.nn.Softplus()(samples["_raw_hysterion_density"])
+    del samples["_raw_hysterion_density"]
     pred_summary = summary(samples)
     return pred_summary, samples
