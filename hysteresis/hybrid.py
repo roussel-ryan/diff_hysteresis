@@ -10,9 +10,10 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 from botorch.models.transforms.input import Normalize
 from botorch.models.transforms.outcome import Standardize
 from botorch.models.model import Model
+from hysteresis.modes import ModeEvaluator, NEXT, REGRESSION, FUTURE
 
 
-class HybridGP(Model):
+class HybridGP(Model, ModeEvaluator):
     @classmethod
     def construct_inputs(cls, training_data: TrainingData, **kwargs: Any) -> Dict[
         str, Any]:
@@ -36,12 +37,16 @@ class HybridGP(Model):
         if len(self.train_y.shape) != 2:
             raise ValueError("train_y must be 2D")
         if self.train_x.shape[0] != self.train_y.shape[0]:
-            raise ValueError("train_x and train_y mush have the same number of samples")
+            raise ValueError("train_x and train_y must have the same number of samples")
 
         if not isinstance(hysteresis_models, list):
             self.hysteresis_models = [hysteresis_models]
         else:
             self.hysteresis_models = hysteresis_models
+
+        # check if all elements are unique
+        if not (len(set(self.hysteresis_models)) == len(self.hysteresis_models)):
+            raise ValueError('all hysteresis models must be unique')
 
         self.input_dim = self.train_x.shape[-1]
         if self.input_dim != len(self.hysteresis_models):
@@ -53,12 +58,8 @@ class HybridGP(Model):
         self.train_model()
 
     def train_model(self):
-        train_m = []
-        # set applied fields and calculate magnetization for training data
-        for idx, hyst_model in enumerate(self.hysteresis_models):
-            hyst_model.applied_fields = self.train_x[:, idx]
-            train_m += [hyst_model.predict_magnetization_from_applied_fields()]
-        train_m = torch.cat([ele.unsqueeze(1) for ele in train_m], dim=1)
+        self.regression()
+        train_m = self.get_magnetization(self.train_x)
 
         if len(train_m) >= 2:
             bounds = torch.cat(
@@ -69,20 +70,28 @@ class HybridGP(Model):
                 dim=1,
             ).T
 
-            norm_x = Normalize(self.input_dim, bounds)
+            norm_x = Normalize(self.input_dim, bounds.detach())
             standardize_y = Standardize(1)
         else:
             norm_x = None
             standardize_y = None
 
         self.gp = SingleTaskGP(
-            train_m,
+            train_m.detach(),
             self.train_y,
             input_transform=norm_x,
             outcome_transform=standardize_y,
         )
         self.mll = ExactMarginalLogLikelihood(self.gp.likelihood, self.gp)
         fit_gpytorch_model(self.mll)
+
+    def get_magnetization(self, X):
+        train_m = []
+        # set applied fields and calculate magnetization for training data
+        for idx, hyst_model in enumerate(self.hysteresis_models):
+            hyst_model.mode = self.mode
+            train_m += [hyst_model(X[..., idx])]
+        return torch.cat([ele.unsqueeze(1) for ele in train_m], dim=1)
 
     def predict_from_magnetization(self, M):
         """Predict output based on magnetization, not applied field H"""
@@ -100,14 +109,10 @@ class HybridGP(Model):
         if X.shape[-1] != len(self.hysteresis_models):
             raise ValueError("test data must match the number of hysteresis models")
 
-        train_m = []
-        # set applied fields and calculate magnetization for training data
-        for idx, hyst_model in enumerate(self.hysteresis_models):
-            train_m += [hyst_model.predict_magnetization_next(X[..., idx])]
-        train_m = torch.cat([ele for ele in train_m], dim=1)
+        eval_m = self.get_magnetization(X)
 
         # calculate posterior and un-transform standardization if requested
-        post = self.gp(train_m.reshape(-1, 1, self.input_dim))
+        post = self.gp(eval_m.reshape(-1, 1, self.input_dim))
 
         if untransform_posterior:
             return self.gp.outcome_transform.untransform_posterior(post)

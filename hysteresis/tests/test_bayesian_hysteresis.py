@@ -9,6 +9,9 @@ from hysteresis.training import train_bayes, map_bayes
 
 
 class TestBayesianHysteresis:
+    def test_empty(self):
+        B = BayesianHysteresis()
+
     def test_init(self):
         h_data = torch.rand(10) * 10.0
         m_data = h_data ** 2
@@ -18,7 +21,19 @@ class TestBayesianHysteresis:
 
     def test_sample_train(self):
         h_data = torch.rand(10) * 10.0
-        m_data = h_data
+        m_data = h_data + 0.001
+
+        B = BayesianHysteresis(h_data, m_data)
+
+        # test training with MAP
+        map_bayes(B, 100)
+
+        # test training with AutoNormal
+        train_bayes(B, 100)
+
+    def test_prediction(self):
+        h_data = torch.rand(10) * 10.0
+        m_data = h_data + 0.001
 
         B = BayesianHysteresis(h_data, m_data)
 
@@ -34,10 +49,7 @@ class TestBayesianHysteresis:
         assert torch.all(samples['density'] > 0)
         assert samples['density'].shape == torch.Size([10, 1, len(B.mesh_points)])
 
-        # test training with MAP
-        map_bayes(h_data, m_data, B, 100)
 
-    def test_save_load(self):
-        pass
+
 
 

@@ -5,7 +5,8 @@ from torch.nn import Module
 class Polynomial(Module):
     def __init__(self, degree):
         super(Polynomial, self).__init__()
-        self.weights = torch.nn.Parameter(torch.ones(degree))
+        weights = torch.zeros(degree)
+        self.weights = torch.nn.Parameter(weights)
         self.bias = torch.nn.Parameter(torch.zeros(1))
         self.p = torch.arange(1, degree + 1)
 

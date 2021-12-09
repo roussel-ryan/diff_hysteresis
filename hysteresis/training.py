@@ -3,6 +3,7 @@ import pyro
 import torch
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoMultivariateNormal, AutoDelta, AutoNormal
+from hysteresis.modes import REGRESSION
 
 import logging
 
@@ -31,7 +32,7 @@ def train_MSE(model, train_x, train_y, n_steps, lr=0.1, atol=1.0e-8):
 
 
 def train_bayes(model, num_steps, guide=None, initial_lr=0.001, gamma=0.1):
-    assert model.mode == 'regression'
+    assert model.mode == REGRESSION
 
     guide = guide or AutoNormal(model)
 

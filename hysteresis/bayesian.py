@@ -19,7 +19,7 @@ class BayesianHysteresis(BaseHysteresis, PyroModule):
             mesh_scale: float = 1.0,
             mesh_density_function: Callable = None,
             polynomial_degree: int = 1,
-            temp: float = 1e-2,
+            temp: float = 1e-3,
             noise: float = 1e-2
     ):
         super(BayesianHysteresis, self).__init__(

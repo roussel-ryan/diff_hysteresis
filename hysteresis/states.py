@@ -16,7 +16,9 @@ def sweep_left(h, mesh, initial_state, T=1e-2):
 
 
 def switch(h, m, T=1e-4):
-    return 1.0 + torch.tanh((h - m) / T)
+    # note that + T is needed to satisfy boundary conditions (creating a bit of delay
+    # before the flip starts happening
+    return 1.0 + torch.tanh((h - m + T) / T)
 
 
 def predict_batched_state(h, mesh_points, current_state, current_field):
@@ -85,11 +87,11 @@ def get_states(
     ValueError
         If n is negative.
     """
-    # verify the inputs are in the normalized region
-    if not (
-        torch.all(torch.greater_equal(h, torch.zeros(1)))
-        and torch.all(torch.less_equal(h, torch.ones(1)))
-    ):
+    # verify the inputs are in the normalized region within some machine epsilon
+    epsilon = 1e-6
+    if torch.any(
+            torch.less(h + epsilon, torch.zeros(1))) or torch.any(
+            torch.greater(h - epsilon, torch.ones(1))):
         raise RuntimeError("applied values are outside of the unit domain")
 
     assert len(h.shape) == 1

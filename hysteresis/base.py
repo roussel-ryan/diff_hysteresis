@@ -5,13 +5,14 @@ from typing import Dict, Callable
 from .meshing import create_triangle_mesh, default_mesh_size
 from .states import get_states, predict_batched_state
 from .transform import HysteresisTransform
+from .modes import ModeEvaluator, REGRESSION, NEXT, FUTURE
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 
-class BaseHysteresis(Module):
-    _mode = 'regression'
+class BaseHysteresis(Module, ModeEvaluator):
 
     def __init__(
             self,
@@ -61,23 +62,35 @@ class BaseHysteresis(Module):
         # if provided create normalization transform and set magnetization history
         self.polynomial_degree = polynomial_degree
         self.polynomial_fit_iterations = polynomial_fit_iterations
-        self.set_history(train_h, train_m)
+
+        # if training info is specified then set the history vars and create the fit
+        # object - otherwise initialize with default values
+        if isinstance(train_h, Tensor):
+            self.set_history(train_h, train_m)
 
     def set_history(self, history_h, history_m, retrain_normalization=True):
         """ set historical state values and recalculate hysterion states"""
-        history_h = history_h.to(**self.tkwargs)
-        history_m = history_m.to(**self.tkwargs)
+
+        if isinstance(history_h, Tensor):
+            history_h = history_h.to(**self.tkwargs)
+
+        if isinstance(history_m, Tensor):
+            history_m = history_m.to(**self.tkwargs)
+
+            if torch.equal(history_h, history_m):
+                raise RuntimeError('train h and train m cannot be equal')
 
         if retrain_normalization:
             self.transformer = HysteresisTransform(
                 history_h, history_m,
                 self.polynomial_degree,
-
             )
 
         _history_h, _history_m = self.transformer.transform(history_h, history_m)
         self.register_buffer('_history_h', _history_h.detach())
-        self.register_buffer('_history_m', _history_m.detach())
+
+        if isinstance(_history_m, Tensor):
+            self.register_buffer('_history_m', _history_m.detach())
 
         # recalculate states
         _states = get_states(self._history_h, self.mesh_points, temp=self.temp)
@@ -86,10 +99,6 @@ class BaseHysteresis(Module):
     @property
     def hysterion_density(self):
         return torch.nn.Softplus()(self._raw_hysterion_density)
-
-    @property
-    def mode(self):
-        return self._mode
 
     @hysterion_density.setter
     def hysterion_density(self, value: Tensor):
@@ -109,15 +118,18 @@ class BaseHysteresis(Module):
 
     def forward(self, x: Tensor, return_real=False):
         x = x.to(**self.tkwargs)
-        if self._mode == 'regression':
+        if self._mode == REGRESSION:
             assert torch.all(torch.isclose(
                 x,
                 self.transformer.untransform(self._history_h)[0]
-            )), "must do regression on history fields"
+            )), "must do regression on history fields if in REGRESSION mode"
             states = self._states
             norm_h = self._history_h
 
-        elif self._mode == 'future':
+        elif self.mode == FUTURE:
+            if len(x.shape) != 1:
+                raise ValueError('input must be 1D for FUTURE mode')
+
             norm_h, _ = self.transformer.transform(x)
             states = get_states(
                 norm_h,
@@ -127,9 +139,9 @@ class BaseHysteresis(Module):
                 tkwargs=self.tkwargs
             )
 
-        elif self._mode == 'next':
+        elif self.mode == NEXT:
             if x.shape[1:] != torch.Size([1, 1]) and len(x.shape) == 3:
-                raise ValueError(f'shape of x must be [-1, 1, 1] for next mode, '
+                raise ValueError(f'shape of x must be [-1, 1, 1] for NEXT mode, '
                                  'current shape is {x.shape}')
             norm_h, _ = self.transformer.transform(x)
 
@@ -143,7 +155,7 @@ class BaseHysteresis(Module):
             norm_h = norm_h.reshape(-1, states.shape[-2])
 
         else:
-            raise ValueError(f'mode:`{self._mode}` not accepted')
+            raise ValueError(f'mode:`{self.mode}` not accepted')
 
         # return values w/or w/o normalization
         if return_real:
@@ -159,10 +171,25 @@ class BaseHysteresis(Module):
                 states, norm_h
             )
 
-        if self._mode == 'next':
+        if self.mode == NEXT:
             return result.reshape(-1, 1, 1)
         else:
             return result
+
+    def load_from_state_dict(self, state_dict):
+        for ele in ['_history_h', '_history_m', '_states']:
+            self.register_buffer(ele, state_dict.pop(ele))
+
+        # load polynomial fit
+        self.transformer = HysteresisTransform(
+            None, None,
+            self.polynomial_degree,
+        )
+        self.load_state_dict(state_dict, strict=False)
+
+    @property
+    def valid_domain(self):
+        return self.transformer.get_valid_domain()
 
     @property
     def n_mesh_points(self):
@@ -177,15 +204,3 @@ class BaseHysteresis(Module):
         return self.transformer.untransform(
             self._history_h, self._history_m
         )[1].detach()
-
-    def regression(self, **kwargs):
-        self._mode = 'regression'
-
-    def future(self):
-        self._mode = 'future'
-
-    def next(self):
-        self._mode = 'next'
-
-
-

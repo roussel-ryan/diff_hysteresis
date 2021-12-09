@@ -7,8 +7,8 @@ from hysteresis.training import train_MSE
 class HysteresisTransform(Module):
     _min_h = None
     _max_h = None
-    _offset_m = None
-    _scale_m = None
+    _offset_m = torch.zeros(1)
+    _scale_m = torch.ones(1)
     _trained_m = False
     _trained_h = False
 
@@ -17,10 +17,14 @@ class HysteresisTransform(Module):
         super(HysteresisTransform, self).__init__()
         self.polynomial_degree = polynomial_degree
         self.polynomial_fit_iterations = polynomial_fit_iterations
-        if isinstance(train_m, torch.Tensor):
+
+        if isinstance(train_m, torch.Tensor) and isinstance(train_h, torch.Tensor):
             self.update_all(train_h, train_m)
-        else:
+        elif isinstance(train_h, torch.Tensor):
             self.update_h_normalize(train_h)
+            self.poly_fit = Polynomial(self.polynomial_degree)
+        else:
+            self.poly_fit = Polynomial(self.polynomial_degree)
 
     def update_all(self, train_h, train_m):
         self.update_h_normalize(train_h)
@@ -37,6 +41,9 @@ class HysteresisTransform(Module):
         self._max_h = torch.max(train_h)
         self._trained_h = True
 
+    def get_valid_domain(self):
+        return torch.tensor((self._min_h, self._max_h))
+
     def update_m_normalize(self, train_h, train_m):
         self.update_fit(train_h, train_m)
 
@@ -47,17 +54,11 @@ class HysteresisTransform(Module):
         self._trained_m = True
 
     def _transform_h(self, h):
-        if self._trained_h:
-            return (h - self._min_h) / (self._max_h - self._min_h)
-        else:
-            raise RuntimeError('h transformation not trained yet')
+        return (h - self._min_h) / (self._max_h - self._min_h)
 
     def _transform_m(self, h, m):
-        if self._trained_m:
-            fit = self.poly_fit(h)
-            return (m - fit - self._offset_m) / self._scale_m
-        else:
-            raise RuntimeError('m transformation not trained yet')
+        fit = self.poly_fit(h)
+        return (m - fit - self._offset_m) / self._scale_m
 
     def transform(self, h, m=None):
         hn = self._transform_h(h)
@@ -69,20 +70,16 @@ class HysteresisTransform(Module):
         return hn, mn
 
     def _untransform_h(self, hn):
-        if self._trained_h:
-            return hn * (self._max_h - self._min_h) + self._min_h
-        else:
-            raise RuntimeError('h transformation not trained yet')
+        return hn * (self._max_h - self._min_h) + self._min_h
 
     def _untransform_m(self, hn, mn):
-        if self._trained_m:
-            fit = self.poly_fit(self._untransform_h(hn))
-            return self._scale_m * mn + fit.reshape(hn.shape) + self._offset_m
-        else:
-            raise RuntimeError('m transformation not trained yet')
+        fit = self.poly_fit(self._untransform_h(hn))
+        return self._scale_m * mn + fit.reshape(hn.shape) + self._offset_m
 
     def untransform(self, hn, mn=None):
-        if torch.min(hn) < 0.0 or torch.max(hn) > 1.0:
+        # verify the inputs are in the normalized region within some machine epsilon
+        epsilon = 1e-6
+        if torch.min(hn) + epsilon < 0.0 or torch.max(hn) - epsilon > 1.0:
             raise RuntimeWarning('input bounds of hn are outside normalization '
                                  'region, are you sure h is normalized?')
 
