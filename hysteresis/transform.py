@@ -7,13 +7,13 @@ from hysteresis.training import train_MSE
 class HysteresisTransform(Module):
     _min_h = None
     _max_h = None
+    _min_m = None
+    _max_m = None
     _offset_m = torch.zeros(1)
     _scale_m = torch.ones(1)
-    _trained_m = False
-    _trained_h = False
 
     def __init__(self, train_h, train_m=None, polynomial_degree=5,
-                 polynomial_fit_iterations=3000):
+                 polynomial_fit_iterations=5000):
         super(HysteresisTransform, self).__init__()
         self.polynomial_degree = polynomial_degree
         self.polynomial_fit_iterations = polynomial_fit_iterations
@@ -21,43 +21,62 @@ class HysteresisTransform(Module):
         if isinstance(train_m, torch.Tensor) and isinstance(train_h, torch.Tensor):
             self.update_all(train_h, train_m)
         elif isinstance(train_h, torch.Tensor):
-            self.update_h_normalize(train_h)
-            self.poly_fit = Polynomial(self.polynomial_degree)
+            self.update_h_transform(train_h)
+            self._poly_fit = Polynomial(self.polynomial_degree)
         else:
-            self.poly_fit = Polynomial(self.polynomial_degree)
+            self._poly_fit = Polynomial(self.polynomial_degree)
 
     def update_all(self, train_h, train_m):
-        self.update_h_normalize(train_h)
-        self.update_m_normalize(train_h, train_m)
+        self.update_h_transform(train_h)
+        self.update_m_transform(train_h, train_m)
 
-    def update_fit(self, train_h, train_m):
-        """ do polynomial fitting without normalizing train_h"""
-        self.poly_fit = Polynomial(self.polynomial_degree)
-        train_MSE(self.poly_fit, train_h, train_m, self.polynomial_fit_iterations)
-        self.poly_fit.requires_grad_(False)
+    def get_fit(self, h):
+        return self._unnorm_m(self._poly_fit(self._norm_h(h)))
 
-    def update_h_normalize(self, train_h):
+    def update_fit(self, hn, mn):
+        """ do polynomial fitting on normalized train_h and train_m"""
+        self._poly_fit = Polynomial(self.polynomial_degree)
+        train_MSE(self._poly_fit, hn, mn, self.polynomial_fit_iterations)
+        self._poly_fit.requires_grad_(False)
+
+    def update_h_transform(self, train_h):
         self._min_h = torch.min(train_h)
         self._max_h = torch.max(train_h)
-        self._trained_h = True
+
+    def _norm_h(self, h):
+        return (h - self._min_h) / (self._max_h - self._min_h)
+
+    def _unnorm_h(self, hn):
+        return hn * (self._max_h - self._min_h) + self._min_h
+
+    def _norm_m(self, m):
+        return (m - self._min_m) / (self._max_m - self._min_m)
+
+    def _unnorm_m(self, mn):
+        return mn * (self._max_m - self._min_m) + self._min_m
 
     def get_valid_domain(self):
         return torch.tensor((self._min_h, self._max_h))
 
-    def update_m_normalize(self, train_h, train_m):
-        self.update_fit(train_h, train_m)
+    def update_m_transform(self, train_h, train_m):
+        self._min_m = torch.min(train_m)
+        self._max_m = torch.max(train_m)
 
-        fit = self.poly_fit(train_h)
+        self.update_fit(
+            self._norm_h(train_h),
+            self._norm_m(train_m)
+        )
+
+        fit = self._unnorm_m(self._poly_fit(self._norm_h(train_h)))
         m_subtracted = train_m - fit
         self._offset_m = torch.mean(m_subtracted)
         self._scale_m = torch.std(m_subtracted - self._offset_m)
-        self._trained_m = True
 
     def _transform_h(self, h):
-        return (h - self._min_h) / (self._max_h - self._min_h)
+        return self._norm_h(h)
 
     def _transform_m(self, h, m):
-        fit = self.poly_fit(h)
+        fit = self._unnorm_m(self._poly_fit(self._norm_h(h)))
         return (m - fit - self._offset_m) / self._scale_m
 
     def transform(self, h, m=None):
@@ -70,10 +89,10 @@ class HysteresisTransform(Module):
         return hn, mn
 
     def _untransform_h(self, hn):
-        return hn * (self._max_h - self._min_h) + self._min_h
+        return self._unnorm_h(hn)
 
     def _untransform_m(self, hn, mn):
-        fit = self.poly_fit(self._untransform_h(hn))
+        fit = self._unnorm_m(self._poly_fit(hn))
         return self._scale_m * mn + fit.reshape(hn.shape) + self._offset_m
 
     def untransform(self, hn, mn=None):

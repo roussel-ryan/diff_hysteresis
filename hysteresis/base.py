@@ -136,7 +136,8 @@ class BaseHysteresis(Module, ModeEvaluator):
                 self.mesh_points,
                 current_state=self._states[-1],
                 current_field=self._history_h[-1],
-                tkwargs=self.tkwargs
+                tkwargs=self.tkwargs,
+                temp=self.temp
             )
 
         elif self.mode == NEXT:
