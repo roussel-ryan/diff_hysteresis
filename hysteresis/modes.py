@@ -1,4 +1,3 @@
-
 FITTING = 0
 REGRESSION = 1
 NEXT = 2

@@ -14,9 +14,9 @@ class HysteresisMagnet(Module, ABC):
         self.L = L
 
     def apply_field(self, H: Tensor):
-        self.hysteresis_model.applied_fields = torch.cat((
-            self.hysteresis_model.applied_fields, H.reshape(1)
-        ))
+        self.hysteresis_model.applied_fields = torch.cat(
+            (self.hysteresis_model.applied_fields, H.reshape(1))
+        )
 
     def get_transport_matrix(self):
         m = self.hysteresis_model.predict_magnetization_from_applied_fields()
@@ -31,7 +31,7 @@ class HysteresisMagnet(Module, ABC):
         return self.hysteresis_model.predict_magnetization_from_applied_fields()
 
     def forward(self):
-        """ Returns the current transport matrix"""
+        """Returns the current transport matrix"""
         return self.get_transport_matrix()
 
     @abstractmethod
@@ -64,7 +64,7 @@ class HysteresisAccelerator(TorchAccelerator):
 
         # create parameters for optimization
         for name in self.hysteresis_element_names:
-            self.register_parameter(name + '_H', Parameter(torch.zeros(1)))
+            self.register_parameter(name + "_H", Parameter(torch.zeros(1)))
 
     def calculate_fantasy_transport(self, h_fantasy_dict: Dict):
         M_i = torch.eye(6)
@@ -72,7 +72,7 @@ class HysteresisAccelerator(TorchAccelerator):
         for name, ele in self.elements.items():
             if isinstance(ele, HysteresisMagnet):
                 element_matrix = ele.get_fantasy_transport_matrix(
-                    self.get_parameter(name + '.H')
+                    self.get_parameter(name + ".H")
                 )
             else:
                 element_matrix = ele.forward()

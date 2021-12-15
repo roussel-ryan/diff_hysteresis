@@ -12,8 +12,9 @@ class HysteresisTransform(Module):
     _offset_m = torch.zeros(1)
     _scale_m = torch.ones(1)
 
-    def __init__(self, train_h, train_m=None, polynomial_degree=5,
-                 polynomial_fit_iterations=5000):
+    def __init__(
+        self, train_h, train_m=None, polynomial_degree=5, polynomial_fit_iterations=5000
+    ):
         super(HysteresisTransform, self).__init__()
         self.polynomial_degree = polynomial_degree
         self.polynomial_fit_iterations = polynomial_fit_iterations
@@ -37,7 +38,7 @@ class HysteresisTransform(Module):
         return self._unnorm_m(self._poly_fit(self._norm_h(h)))
 
     def update_fit(self, hn, mn):
-        """ do polynomial fitting on normalized train_h and train_m"""
+        """do polynomial fitting on normalized train_h and train_m"""
         self._poly_fit = Polynomial(self.polynomial_degree)
         train_MSE(self._poly_fit, hn, mn, self.polynomial_fit_iterations)
         self._poly_fit.requires_grad_(False)
@@ -77,10 +78,7 @@ class HysteresisTransform(Module):
         self._min_m = torch.min(train_m)
         self._max_m = torch.max(train_m)
 
-        self.update_fit(
-            self._norm_h(train_h),
-            self._norm_m(train_m)
-        )
+        self.update_fit(self._norm_h(train_h), self._norm_m(train_m))
 
         fit = self._unnorm_m(self._poly_fit(self._norm_h(train_h)))
         m_subtracted = train_m - fit
@@ -114,8 +112,10 @@ class HysteresisTransform(Module):
         # verify the inputs are in the normalized region within some machine epsilon
         epsilon = 1e-6
         if torch.min(hn) + epsilon < 0.0 or torch.max(hn) - epsilon > 1.0:
-            raise RuntimeWarning('input bounds of hn are outside normalization '
-                                 'region, are you sure h is normalized?')
+            raise RuntimeWarning(
+                "input bounds of hn are outside normalization "
+                "region, are you sure h is normalized?"
+            )
 
         h = self._untransform_h(hn)
         if isinstance(mn, torch.Tensor):

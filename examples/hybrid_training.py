@@ -9,7 +9,7 @@ from hysteresis.hybrid import ExactHybridGP
 from gpytorch.mlls.exact_marginal_log_likelihood import ExactMarginalLogLikelihood
 from botorch.fit import fit_gpytorch_model
 
-aps_model = torch.load('aps_model.pt')
+aps_model = torch.load("aps_model.pt")
 
 train_h = aps_model.history_h
 train_m = aps_model.history_m

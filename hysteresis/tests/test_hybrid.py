@@ -15,9 +15,8 @@ import os
 
 def load():
     aps_model = torch.load(
-        os.path.join(
-            hysteresis.__file__.split('__init__')[0],
-            'tests', 'aps_model.pt'))
+        os.path.join(hysteresis.__file__.split("__init__")[0], "tests", "aps_model.pt")
+    )
 
     train_h = aps_model.history_h.reshape(-1, 1)
     train_m = aps_model.history_m.reshape(-1, 1)
@@ -35,20 +34,19 @@ class TestExactHybridGP:
 
         model = ExactHybridGP(train_x, train_y, H, likelihood)
 
-        assert torch.all(
-            torch.isclose(model.train_inputs[0].squeeze(), train_x.squeeze()))
-        assert torch.all(torch.isclose(model.train_targets, train_y))
+        assert torch.allclose(model.train_inputs[0].squeeze(), train_x.squeeze())
+        assert torch.allclose(model.train_targets, train_y)
 
     def test_train(self):
         train_x, train_m, train_y = load()
         H = BaseHysteresis(train_x.flatten(), polynomial_degree=3)
         for constraint_name, constraint in H.named_constraints():
-            print(f'Constraint name: {constraint_name:55} constraint = {constraint}')
+            print(f"Constraint name: {constraint_name:55} constraint = {constraint}")
         likelihood = GaussianLikelihood()
         model = ExactHybridGP(train_x, train_y.flatten(), H, likelihood)
 
         mll = ExactMarginalLogLikelihood(likelihood, model)
-        fit_gpytorch_model(mll, options={'maxiter': 5})
+        fit_gpytorch_model(mll, options={"maxiter": 5})
 
     def test_predict(self):
         train_x, train_m, train_y = load()

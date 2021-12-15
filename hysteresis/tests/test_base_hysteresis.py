@@ -36,19 +36,18 @@ class TestBaseHysteresis:
 
         H = BaseHysteresis(h_data, m_data)
         n_grid_pts = len(H.mesh_points)
-        assert torch.isclose(min(H._history_h), torch.zeros(1).double()) and \
-               torch.isclose(max(H._history_h), torch.ones(1).double())
+        assert torch.isclose(
+            min(H._history_h), torch.zeros(1).double()
+        ) and torch.isclose(max(H._history_h), torch.ones(1).double())
         assert torch.isclose(
             torch.mean(H._history_m), torch.zeros(1).double(), atol=1e-6
         )
-        assert torch.isclose(
-            torch.std(H._history_m), torch.ones(1).double(), atol=1e-6
-        )
+        assert torch.isclose(torch.std(H._history_m), torch.ones(1).double(), atol=1e-6)
         assert H._states.shape == torch.Size([10, n_grid_pts])
 
         # test unnormalized versions
-        assert torch.all(torch.isclose(H.history_h, h_data.double(), atol=1e-5))
-        assert torch.all(torch.isclose(H.history_m, m_data.double(), atol=1e-5))
+        assert torch.allclose(H.history_h, h_data.double(), atol=1e-5)
+        assert torch.allclose(H.history_m, m_data.double(), atol=1e-5)
 
         # test for gradients
         for ele in [H._history_h, H._history_m, H.history_h, H.history_m]:
@@ -86,7 +85,7 @@ class TestBaseHysteresis:
         m_pred = H(h_data, return_real=True)
         assert H.mode == FITTING
         assert m_pred.shape == torch.Size([20])
-        assert torch.all(torch.isclose(m_data.double(), m_pred, rtol=1e-2))
+        assert torch.allclose(m_data.double(), m_pred, rtol=1e-2)
 
         m_pred = H(h_data, return_real=False)
         assert m_pred.shape == torch.Size([20])
@@ -110,14 +109,11 @@ class TestBaseHysteresis:
         m_pred_future_norm = H(h_test)
         m_pred_future = H(h_test, return_real=True)
         assert m_pred_future_norm.shape == torch.Size([100])
-        assert torch.all(
-            torch.isclose(
-                m_pred_future,
-                H.transformer.untransform(
-                    H.transformer.transform(h_test)[0],
-                    m_pred_future_norm
-                )[1]
-            )
+        assert torch.allclose(
+            m_pred_future,
+            H.transformer.untransform(
+                H.transformer.transform(h_test)[0], m_pred_future_norm
+            )[1],
         )
 
     def test_forward_next(self):
@@ -134,14 +130,11 @@ class TestBaseHysteresis:
         assert m_pred_future_norm.shape == torch.Size([100, 1, 1])
         assert m_pred_future.shape == torch.Size([100, 1, 1])
 
-        assert torch.all(
-            torch.isclose(
-                m_pred_future,
-                H.transformer.untransform(
-                    H.transformer.transform(h_test)[0],
-                    m_pred_future_norm
-                )[1]
-            )
+        assert torch.allclose(
+            m_pred_future,
+            H.transformer.untransform(
+                H.transformer.transform(h_test)[0], m_pred_future_norm
+            )[1],
         )
 
         bad_inputs = [torch.rand(2, 3, 4), torch.rand(10), torch.rand(10, 1)]
@@ -156,9 +149,9 @@ class TestBaseHysteresis:
         # apply a field to the magnet
         h_new = torch.rand(3) * 5.0 + min(h_data)
         for i in range(len(h_new)):
-            h_new_total = torch.cat((h_data, h_new[:i + 1])).double()
+            h_new_total = torch.cat((h_data, h_new[: i + 1])).double()
             H.apply_field(h_new[i])
-            assert torch.all(torch.isclose(H.history_h, h_new_total))
+            assert torch.allclose(H.history_h, h_new_total)
             assert torch.isclose(H.history_h[-1], h_new[i].double())
 
             # compare hysterion state shape to ground truth
@@ -166,13 +159,9 @@ class TestBaseHysteresis:
                 H.transformer.transform(h_new_total)[0],
                 H.mesh_points,
                 temp=H.temp,
-                tkwargs=H.tkwargs
+                tkwargs=H.tkwargs,
             )
-            assert torch.all(
-                torch.isclose(
-                    states, H._states, atol=1e-3
-                )
-            )
+            assert torch.allclose(states, H._states, atol=1e-3)
 
             # test fitting
             H.fitting()

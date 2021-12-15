@@ -39,17 +39,12 @@ class TestBayesianHysteresis:
 
         results, samples = predict(h_data, B, AutoDelta(B), num_samples=10)
         assert list(results.keys()) == [
-            'scale',
-            'offset',
-            'slope',
-            'obs',
-            '_RETURN',
-            'density'
+            "scale",
+            "offset",
+            "slope",
+            "obs",
+            "_RETURN",
+            "density",
         ]
-        assert torch.all(samples['density'] > 0)
-        assert samples['density'].shape == torch.Size([10, 1, len(B.mesh_points)])
-
-
-
-
-
+        assert torch.all(samples["density"] > 0)
+        assert samples["density"].shape == torch.Size([10, 1, len(B.mesh_points)])

@@ -2,8 +2,13 @@ import pytest
 import torch
 
 from hysteresis.meshing import create_triangle_mesh
-from hysteresis.states import get_states, switch, sweep_up, sweep_left, \
-    predict_batched_state
+from hysteresis.states import (
+    get_states,
+    switch,
+    sweep_up,
+    sweep_left,
+    predict_batched_state,
+)
 
 
 class TestStateCalc:
@@ -72,16 +77,9 @@ class TestStateCalc:
         current_state = torch.ones(mesh.shape[0]) * -1.0
         current_field = -0.01
         h = torch.linspace(0.0, 1.0, 20, requires_grad=True)
-        out = predict_batched_state(h.reshape(20, 1, 1),
-                                    mesh,
-                                    current_state,
-                                    current_field)
+        out = predict_batched_state(
+            h.reshape(20, 1, 1), mesh, current_state, current_field
+        )
         assert out.shape == torch.Size([20, 1, len(mesh)])
         out[0][0][0].backward()
         assert not torch.any(torch.isnan(h.grad))
-
-
-        # idx = 10
-        # plt.tripcolor(*mesh.T, out[idx][0].detach())
-        # plt.axhline(h[idx].detach())
-        # plt.show()

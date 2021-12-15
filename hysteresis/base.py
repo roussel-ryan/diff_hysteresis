@@ -19,18 +19,17 @@ class HysteresisError(Exception):
 
 
 class BaseHysteresis(Module, ModeEvaluator):
-
     def __init__(
-            self,
-            train_h: Tensor = None,
-            train_m: Tensor = None,
-            trainable: bool = True,
-            tkwargs: Dict = None,
-            mesh_scale: float = 1.0,
-            mesh_density_function: Callable = None,
-            polynomial_degree: int = 1,
-            polynomial_fit_iterations: int = 3000,
-            temp: float = 1e-2,
+        self,
+        train_h: Tensor = None,
+        train_m: Tensor = None,
+        trainable: bool = True,
+        tkwargs: Dict = None,
+        mesh_scale: float = 1.0,
+        mesh_density_function: Callable = None,
+        polynomial_degree: int = 1,
+        polynomial_fit_iterations: int = 3000,
+        temp: float = 1e-2,
     ):
         super(BaseHysteresis, self).__init__()
 
@@ -49,18 +48,8 @@ class BaseHysteresis(Module, ModeEvaluator):
         offset = torch.zeros(1)
         scale = torch.ones(1)
         slope = torch.zeros(1)
-        param_vals = [
-            density,
-            offset,
-            scale,
-            slope
-        ]
-        param_names = [
-            "raw_hysterion_density",
-            "raw_offset",
-            "raw_scale",
-            "raw_slope"
-        ]
+        param_vals = [density, offset, scale, slope]
+        param_names = ["raw_hysterion_density", "raw_offset", "raw_scale", "raw_slope"]
         param_constraints = [
             gpytorch.constraints.Interval(0.0, 1.0),
             gpytorch.constraints.Interval(-10.0, 10.0),
@@ -70,7 +59,8 @@ class BaseHysteresis(Module, ModeEvaluator):
 
         self.trainable = trainable
         for param_name, param_val, param_constraint in zip(
-                param_names, param_vals, param_constraints):
+            param_names, param_vals, param_constraints
+        ):
             if self.trainable:
                 self.register_parameter(param_name, Parameter(param_val))
                 self.register_constraint(param_name, param_constraint)
@@ -82,9 +72,7 @@ class BaseHysteresis(Module, ModeEvaluator):
         self.polynomial_degree = polynomial_degree
         self.polynomial_fit_iterations = polynomial_fit_iterations
         self.transformer = HysteresisTransform(
-            train_h, train_m,
-            self.polynomial_degree,
-            self.polynomial_fit_iterations
+            train_h, train_m, self.polynomial_degree, self.polynomial_fit_iterations
         )
 
         # if training info is specified then set the history vars
@@ -92,10 +80,11 @@ class BaseHysteresis(Module, ModeEvaluator):
             self.set_history(train_h, train_m, False)
 
     def set_history(self, history_h, history_m, retrain_normalization=True):
-        """ set historical state values and recalculate hysterion states"""
+        """set historical state values and recalculate hysterion states"""
         if retrain_normalization:
             self.transformer = HysteresisTransform(
-                history_h, history_m,
+                history_h,
+                history_m,
                 self.polynomial_degree,
             )
 
@@ -106,7 +95,7 @@ class BaseHysteresis(Module, ModeEvaluator):
             history_m = history_m.to(**self.tkwargs)
 
             if torch.equal(history_h, history_m):
-                raise RuntimeError('train h and train m cannot be equal')
+                raise RuntimeError("train h and train m cannot be equal")
 
         _history_h, _history_m = self.transformer.transform(history_h, history_m)
         self._update_h_history_buffers(_history_h)
@@ -116,22 +105,21 @@ class BaseHysteresis(Module, ModeEvaluator):
             self.regression()
             _history_m = self.forward(history_h.detach())
             self.mode = old_mode
-        self.register_buffer('_history_m', _history_m.detach())
+        self.register_buffer("_history_m", _history_m.detach())
 
     def _update_h_history_buffers(self, norm_history_h):
-        self.register_buffer('_history_h', norm_history_h.detach())
+        self.register_buffer("_history_h", norm_history_h.detach())
 
         # recalculate states
         _states = get_states(self._history_h, self.mesh_points, temp=self.temp)
-        self.register_buffer('_states', _states)
+        self.register_buffer("_states", _states)
 
     def apply_field(self, h):
         h = torch.atleast_1d(h)
         self._check_inside_valid_domain(h)
-        _history_h = torch.cat((
-            self._history_h,
-            self.transformer.transform(h)[0]
-        )).detach()
+        _history_h = torch.cat(
+            (self._history_h, self.transformer.transform(h)[0])
+        ).detach()
         self._update_h_history_buffers(_history_h)
 
     def _predict_normalized_magnetization(self, states, h):
@@ -141,40 +129,39 @@ class BaseHysteresis(Module, ModeEvaluator):
         return self.scale * m.reshape(h.shape) + h * self.slope + self.offset
 
     def get_negative_saturation(self):
-        return self.transformer.untransform(torch.zeros(1), -self.scale +
-                                            self.offset)[1].to(**self.tkwargs)
+        return self.transformer.untransform(torch.zeros(1), -self.scale + self.offset)[
+            1
+        ].to(**self.tkwargs)
 
     def forward(self, x: Tensor, return_real=False):
         x = x.to(**self.tkwargs)
         self._check_inside_valid_domain(x)
         if self._mode == FITTING:
-            if not hasattr(self, '_history_h'):
-                raise RuntimeError('no training data supplied to do regression! Try '
-                                   'using FUTURE mode instead OR set data using '
-                                   'set_history()')
+            if not hasattr(self, "_history_h"):
+                raise RuntimeError(
+                    "no training data supplied to do regression! Try "
+                    "using FUTURE mode instead OR set data using "
+                    "set_history()"
+                )
 
             if self._history_h.shape != self._history_m.shape:
                 raise HysteresisError("history datasets must match shape for fitting")
 
-            assert torch.all(torch.isclose(
-                x,
-                self.transformer.untransform(self._history_h)[0]
-            )), "must do regression on history fields if in REGRESSION mode"
+            assert torch.all(
+                torch.isclose(x, self.transformer.untransform(self._history_h)[0])
+            ), "must do regression on history fields if in REGRESSION mode"
             states = self._states
             norm_h = self._history_h
 
         elif self._mode == REGRESSION:
             norm_h, _ = self.transformer.transform(x)
             states = get_states(
-                norm_h,
-                self.mesh_points,
-                tkwargs=self.tkwargs,
-                temp=self.temp
+                norm_h, self.mesh_points, tkwargs=self.tkwargs, temp=self.temp
             )
 
         elif self._mode == FUTURE:
             if len(x.shape) != 1:
-                raise ValueError('input must be 1D for FUTURE mode')
+                raise ValueError("input must be 1D for FUTURE mode")
 
             norm_h, _ = self.transformer.transform(x)
             states = get_states(
@@ -183,13 +170,15 @@ class BaseHysteresis(Module, ModeEvaluator):
                 current_state=self._states[-1],
                 current_field=self._history_h[-1],
                 tkwargs=self.tkwargs,
-                temp=self.temp
+                temp=self.temp,
             )
 
         elif self._mode == NEXT:
             if x.shape[1:] != torch.Size([1, 1]) or len(x.shape) != 3:
-                raise ValueError(f'shape of x must be [-1, 1, 1] for NEXT mode, '
-                                 f'current shape is {x.shape}')
+                raise ValueError(
+                    f"shape of x must be [-1, 1, 1] for NEXT mode, "
+                    f"current shape is {x.shape}"
+                )
             norm_h, _ = self.transformer.transform(x)
 
             states = predict_batched_state(
@@ -200,31 +189,25 @@ class BaseHysteresis(Module, ModeEvaluator):
             )
 
         else:
-            raise ValueError(f'mode:`{self.mode}` not accepted')
+            raise ValueError(f"mode:`{self.mode}` not accepted")
 
         # return values w/or w/o normalization
         if return_real:
             result = self.transformer.untransform(
-                norm_h,
-                self._predict_normalized_magnetization(
-                    states, norm_h
-                )
+                norm_h, self._predict_normalized_magnetization(states, norm_h)
             )[1]
 
         else:
-            result = self._predict_normalized_magnetization(
-                states, norm_h
-            )
+            result = self._predict_normalized_magnetization(states, norm_h)
         return result
 
     def _check_inside_valid_domain(self, values):
-        if torch.any(
-            values < self.valid_domain[0]
-        ) or torch.any(
+        if torch.any(values < self.valid_domain[0]) or torch.any(
             values > self.valid_domain[1]
         ):
-            raise HysteresisError("Argument values are not inside valid domain for "
-                                  "this model!")
+            raise HysteresisError(
+                "Argument values are not inside valid domain for " "this model!"
+            )
 
     @property
     def valid_domain(self):
@@ -240,47 +223,44 @@ class BaseHysteresis(Module, ModeEvaluator):
 
     @property
     def history_m(self):
-        return self.transformer.untransform(
-            self._history_h, self._history_m
-        )[1].detach()
+        return self.transformer.untransform(self._history_h, self._history_m)[
+            1
+        ].detach()
 
     @property
     def hysterion_density(self):
         return self.raw_hysterion_density_constraint.transform(
-            self.raw_hysterion_density)
+            self.raw_hysterion_density
+        )
 
     @hysterion_density.setter
     def hysterion_density(self, value: Tensor):
         self.initialize(
-            raw_hysterion_density=
-            self.raw_hysterion_density_constraint.inverse_transform(value))
+            raw_hysterion_density=self.raw_hysterion_density_constraint.inverse_transform(
+                value
+            )
+        )
 
     @property
     def offset(self):
-        return self.raw_offset_constraint.transform(
-            self.raw_offset)
+        return self.raw_offset_constraint.transform(self.raw_offset)
 
     @offset.setter
     def offset(self, value: Tensor):
-        self.initialize(
-            raw_offset=self.raw_offset_constraint.inverse_transform(value))
+        self.initialize(raw_offset=self.raw_offset_constraint.inverse_transform(value))
 
     @property
     def scale(self):
-        return self.raw_scale_constraint.transform(
-            self.raw_scale)
+        return self.raw_scale_constraint.transform(self.raw_scale)
 
     @scale.setter
     def scale(self, value: Tensor):
-        self.initialize(
-            raw_scale=self.raw_scale_constraint.inverse_transform(value))
+        self.initialize(raw_scale=self.raw_scale_constraint.inverse_transform(value))
 
     @property
     def slope(self):
-        return self.raw_slope_constraint.transform(
-            self.raw_slope)
+        return self.raw_slope_constraint.transform(self.raw_slope)
 
     @slope.setter
     def slope(self, value: Tensor):
-        self.initialize(
-            raw_slope=self.raw_slope_constraint.inverse_transform(value))
+        self.initialize(raw_slope=self.raw_slope_constraint.inverse_transform(value))

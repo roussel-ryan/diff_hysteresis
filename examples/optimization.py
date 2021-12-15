@@ -21,6 +21,7 @@ def density_function(mesh_pts):
     y = mesh_pts[:, 1]
     return torch.exp(-(y - x) / 0.005)
 
+
 # hysteresis model
 H = BaseHysteresis(mesh_scale=0.1, trainable=False)
 dens = density_function(H.mesh_points)
@@ -61,13 +62,17 @@ train_Y = torch.empty((3, 1))
 print(train_X)
 
 for j in range(3):
-    HA.apply_fields({'q1': train_X[j, 0],
-                     'q2': train_X[j, 1],
-                     'q3': train_X[j, 2], })
+    HA.apply_fields(
+        {
+            "q1": train_X[j, 0],
+            "q2": train_X[j, 1],
+            "q3": train_X[j, 2],
+        }
+    )
 
     # get quad matrices
-    print(HA.elements['q2'].get_magnetization_history())
-    print(HA.elements['q2'].get_transport_matrix())
+    print(HA.elements["q2"].get_magnetization_history())
+    print(HA.elements["q2"].get_transport_matrix())
 
     beam_matrix = HA.forward(initial_beam_matrix, full=False)
     train_Y[j] = objective(beam_matrix[-1])

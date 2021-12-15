@@ -11,6 +11,7 @@ def density_function(mesh_pts):
     y = mesh_pts[:, 1]
     return torch.exp(-(y - x) / 0.1)
 
+
 # generate some dummy data
 train_x = torch.linspace(-10.0, 10.0, 10)
 
@@ -36,8 +37,7 @@ with torch.no_grad():
     std = torch.sqrt(post.variance).flatten()
 
 fig, ax = plt.subplots()
-ax.plot(train_x, train_y.detach(), 'o')
-ax.plot(test_x, mean, 'C1')
-ax.fill_between(test_x.flatten(), mean - std, mean + std, alpha=0.25, fc='C1')
+ax.plot(train_x, train_y.detach(), "o")
+ax.plot(test_x, mean, "C1")
+ax.fill_between(test_x.flatten(), mean - std, mean + std, alpha=0.25, fc="C1")
 plt.show()
-

@@ -15,7 +15,7 @@ class Polynomial(Module):
         return self.bias.to(x) + self.weights.to(x) @ torch.transpose(xx, -1, -2)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from matplotlib import pyplot as plt
     from training import train_MSE
 
@@ -23,7 +23,7 @@ if __name__ == '__main__':
     y = x ** 3 - 2.0 * x + 1.0
     poly = Polynomial(degree=3)
 
-    #fit
+    # fit
     train_MSE(poly, x, y, 2000, lr=0.1)
     print(poly.bias)
     print(poly.weights)

@@ -15,17 +15,9 @@ from hysteresis.modes import ModeEvaluator, NEXT, REGRESSION, FITTING
 class ExactHybridGP(ExactGP, GPyTorchModel, ModeEvaluator):
     _num_outputs = 1
 
-    def __init__(
-            self,
-            train_x: Tensor,
-            train_y: Tensor,
-            hysteresis_models,
-            likelihood
-    ):
+    def __init__(self, train_x: Tensor, train_y: Tensor, hysteresis_models, likelihood):
         super(ExactHybridGP, self).__init__(
-            torch.empty_like(train_x),
-            torch.empty_like(train_y),
-            likelihood
+            torch.empty_like(train_x), torch.empty_like(train_y), likelihood
         )
 
         if train_x.shape[0] != train_y.shape[0]:
@@ -39,11 +31,11 @@ class ExactHybridGP(ExactGP, GPyTorchModel, ModeEvaluator):
         # freeze polynomial fits
         for model in self.hysteresis_models:
             pass
-            #model.transformer.freeze()
+            # model.transformer.freeze()
 
         # check if all elements are unique
         if not (len(set(self.hysteresis_models)) == len(self.hysteresis_models)):
-            raise ValueError('all hysteresis models must be unique')
+            raise ValueError("all hysteresis models must be unique")
 
         self.input_dim = train_x.shape[-1]
         if self.input_dim != len(self.hysteresis_models):
@@ -68,8 +60,9 @@ class ExactHybridGP(ExactGP, GPyTorchModel, ModeEvaluator):
         return torch.cat([ele.unsqueeze(1) for ele in train_m], dim=1)
 
     def predict_from_magnetization(self, m):
-        train_inputs_m = self.get_magnetization(
-            self.train_inputs[0]).reshape(-1, 1, len(self.hysteresis_models))
+        train_inputs_m = self.get_magnetization(self.train_inputs[0]).reshape(
+            -1, 1, len(self.hysteresis_models)
+        )
         total_m = torch.vstack(
             (train_inputs_m, m.reshape(-1, 1, len(self.hysteresis_models)))
         )
@@ -113,19 +106,16 @@ class ExactHybridGP(ExactGP, GPyTorchModel, ModeEvaluator):
         # get magnetization from training data (applied fields) if training the
         # applied fields must exactly match the history (mode==FITTING)
         if self.training:
-            train_m = self.get_magnetization(
-                self.train_inputs[0],
-                mode=FITTING
-            )
+            train_m = self.get_magnetization(self.train_inputs[0], mode=FITTING)
         else:
             # if X is not the same shape as train_inputs then we need to get the
             # subvector - else just use training data
             if self.train_inputs[0].shape != X.shape:
                 # if we are using NEXT mode we need to get a single batch sample
                 if self.mode == NEXT:
-                    train_x = X[0][:len(self.train_inputs[0])]
+                    train_x = X[0][: len(self.train_inputs[0])]
                 else:
-                    train_x = X[:len(self.train_inputs[0])]
+                    train_x = X[: len(self.train_inputs[0])]
             else:
                 train_x = self.train_inputs[0]
 
@@ -134,7 +124,7 @@ class ExactHybridGP(ExactGP, GPyTorchModel, ModeEvaluator):
         # if we are calculating from magnetization, append the magnetization samples
         if from_magnetization:
             total_m = torch.vstack(
-                (train_m, X[len(self.train_inputs[0]):].reshape(-1, 1))
+                (train_m, X[len(self.train_inputs[0]) :].reshape(-1, 1))
             )
         else:
             if self.training or self.train_inputs[0].shape == X.shape:
@@ -142,14 +132,11 @@ class ExactHybridGP(ExactGP, GPyTorchModel, ModeEvaluator):
             else:
                 assert self.mode != FITTING
                 if self.mode == NEXT:
-                    eval_x = X[:, len(self.train_inputs[0]):, :].unsqueeze(-2)
+                    eval_x = X[:, len(self.train_inputs[0]) :, :].unsqueeze(-2)
                 else:
-                    eval_x = X[len(self.train_inputs[0]):]
+                    eval_x = X[len(self.train_inputs[0]) :]
 
-                eval_m = self.get_magnetization(
-                    eval_x,
-                    mode=self.mode
-                )
+                eval_m = self.get_magnetization(eval_x, mode=self.mode)
                 total_m = torch.vstack((train_m, eval_m.reshape(-1, 1)))
 
         mean_m = self.mean_module(total_m)

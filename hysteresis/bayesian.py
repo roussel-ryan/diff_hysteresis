@@ -11,16 +11,16 @@ from torch import Tensor
 
 class BayesianHysteresis(BaseHysteresis, PyroModule):
     def __init__(
-            self,
-            train_h: Tensor = None,
-            train_m: Tensor = None,
-            trainable: bool = True,
-            tkwargs: Dict = None,
-            mesh_scale: float = 1.0,
-            mesh_density_function: Callable = None,
-            polynomial_degree: int = 1,
-            temp: float = 1e-3,
-            noise: float = 1e-2
+        self,
+        train_h: Tensor = None,
+        train_m: Tensor = None,
+        trainable: bool = True,
+        tkwargs: Dict = None,
+        mesh_scale: float = 1.0,
+        mesh_density_function: Callable = None,
+        polynomial_degree: int = 1,
+        temp: float = 1e-3,
+        noise: float = 1e-2,
     ):
         super(BayesianHysteresis, self).__init__(
             train_h,
@@ -30,22 +30,22 @@ class BayesianHysteresis(BaseHysteresis, PyroModule):
             mesh_scale,
             mesh_density_function,
             polynomial_degree,
-            temp=temp
+            temp=temp,
         )
 
         self.noise = noise
 
         if self.n_mesh_points > 1000:
             raise RuntimeWarning(
-                f'More than 1000 mesh points ({self.n_mesh_points}), '
-                f'may slow down calculations significantly'
+                f"More than 1000 mesh points ({self.n_mesh_points}), "
+                f"may slow down calculations significantly"
             )
 
         # add priors to module params
         self._raw_hysterion_density = PyroSample(
             dist.MultivariateNormal(
                 torch.zeros(len(self.mesh_points), **self.tkwargs),
-                covariance_matrix=torch.eye(len(self.mesh_points), **self.tkwargs)
+                covariance_matrix=torch.eye(len(self.mesh_points), **self.tkwargs),
             )
         )
         self.offset = PyroSample(dist.Normal(0.0, 0.5))

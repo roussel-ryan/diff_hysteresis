@@ -3,15 +3,13 @@ import torch
 
 def sweep_up(h, mesh, initial_state, T=1e-2):
     return torch.minimum(
-        initial_state + switch(h, mesh[:, 1], T),
-        torch.ones_like(mesh[:, 1])
+        initial_state + switch(h, mesh[:, 1], T), torch.ones_like(mesh[:, 1])
     )
 
 
 def sweep_left(h, mesh, initial_state, T=1e-2):
     return torch.maximum(
-        initial_state - switch(mesh[:, 0], h, T),
-        torch.ones_like(mesh[:, 0]) * -1.0
+        initial_state - switch(mesh[:, 0], h, T), torch.ones_like(mesh[:, 0]) * -1.0
     )
 
 
@@ -38,9 +36,11 @@ def predict_batched_state(h, mesh_points, current_state, current_field):
 
     """
 
-    result = torch.where(torch.greater_equal(h - current_field, torch.zeros(1).to(h)),
-                         sweep_up(h, mesh_points, current_state),
-                         sweep_left(h, mesh_points, current_state))
+    result = torch.where(
+        torch.greater_equal(h - current_field, torch.zeros(1).to(h)),
+        sweep_up(h, mesh_points, current_state),
+        sweep_left(h, mesh_points, current_state),
+    )
     return result
 
 
@@ -89,9 +89,9 @@ def get_states(
     """
     # verify the inputs are in the normalized region within some machine epsilon
     epsilon = 1e-6
-    if torch.any(
-            torch.less(h + epsilon, torch.zeros(1))) or torch.any(
-            torch.greater(h - epsilon, torch.ones(1))):
+    if torch.any(torch.less(h + epsilon, torch.zeros(1))) or torch.any(
+        torch.greater(h - epsilon, torch.ones(1))
+    ):
         raise RuntimeError("applied values are outside of the unit domain")
 
     assert len(h.shape) == 1
