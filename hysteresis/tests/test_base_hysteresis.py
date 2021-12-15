@@ -1,9 +1,9 @@
-import matplotlib.pyplot as plt
 import pytest
 import torch
-from hysteresis.base import BaseHysteresis
-from hysteresis.visualization import plot_hysteresis_density
+
+from hysteresis.base import BaseHysteresis, HysteresisError
 from hysteresis.modes import NEXT, FUTURE, REGRESSION
+from hysteresis.states import get_states
 
 
 class TestBaseHysteresis:
@@ -12,13 +12,23 @@ class TestBaseHysteresis:
         m_data = torch.rand(10)
 
         H = BaseHysteresis()
+        with pytest.raises(RuntimeError):
+            H(h_data)
+
+        H = BaseHysteresis()
         H.set_history(h_data, m_data)
 
         H2 = BaseHysteresis()
         with pytest.raises(AttributeError):
-            H.history_h = h_data
+            H2.history_h = h_data
         with pytest.raises(AttributeError):
-            H.history_m = m_data
+            H2.history_m = m_data
+
+    def test_constraints(self):
+        H = BaseHysteresis()
+
+        with pytest.raises(RuntimeError):
+            H.offset = 200.0
 
     def test_set_history(self):
         h_data = torch.rand(10) * 10.0
@@ -26,7 +36,8 @@ class TestBaseHysteresis:
 
         H = BaseHysteresis(h_data, m_data)
         n_grid_pts = len(H.mesh_points)
-        assert torch.min(H._history_h) == 0.0 and torch.max(H._history_h) == 1.0
+        assert torch.isclose(min(H._history_h), torch.zeros(1).double()) and \
+               torch.isclose(max(H._history_h), torch.ones(1).double())
         assert torch.isclose(
             torch.mean(H._history_m), torch.zeros(1).double(), atol=1e-6
         )
@@ -64,8 +75,8 @@ class TestBaseHysteresis:
         m_pred = H(h_data)
 
     def test_forward_training(self):
-        h_data = torch.linspace(-1.0, 10.0)
-        m_data = torch.linspace(-10.0, 10.0)
+        h_data = torch.linspace(-1.5, 10.0, 20)
+        m_data = torch.linspace(-9.5, 10.0, 20)
         H = BaseHysteresis(h_data, m_data)
 
         # set hysterion density to near zero
@@ -74,17 +85,18 @@ class TestBaseHysteresis:
         # predict real values with training
         m_pred = H(h_data, return_real=True)
         assert H.mode == REGRESSION
-        assert m_pred.shape == torch.Size([100])
-        assert torch.all(torch.isclose(m_data.double(), m_pred, atol=1e-3))
+        assert m_pred.shape == torch.Size([20])
+        assert torch.all(torch.isclose(m_data.double(), m_pred, rtol=1e-2))
 
         m_pred = H(h_data, return_real=False)
-        assert m_pred.shape == torch.Size([100])
+        assert m_pred.shape == torch.Size([20])
 
     def test_forward_training_w_o_data(self):
         h_data = torch.linspace(-1.0, 10.0)
         H = BaseHysteresis(h_data)
 
         m_pred = H(h_data, return_real=True)
+        assert m_pred.shape == h_data.shape
 
     def test_forward_future(self):
         h_data = torch.linspace(-1.0, 10.0)
@@ -132,8 +144,58 @@ class TestBaseHysteresis:
             )
         )
 
-        with pytest.raises(ValueError):
-            res = H(torch.rand(2, 3, 4))
+        bad_inputs = [torch.rand(2, 3, 4), torch.rand(10), torch.rand(10, 1)]
+        for ele in bad_inputs:
+            with pytest.raises(ValueError):
+                res = H(ele)
+
+    def test_applying_fields(self):
+        h_data = torch.linspace(1.0, 10.0, 10)
+        H = BaseHysteresis(h_data)
+
+        # apply a field to the magnet
+        h_new = torch.rand(3) * 5.0 + min(h_data)
+        for i in range(len(h_new)):
+            h_new_total = torch.cat((h_data, h_new[:i + 1])).double()
+            H.apply_field(h_new[i])
+            assert torch.all(torch.isclose(H.history_h, h_new_total))
+            assert torch.isclose(H.history_h[-1], h_new[i].double())
+
+            # compare hysterion state shape to ground truth
+            states = get_states(
+                H.transformer.transform(h_new_total)[0],
+                H.mesh_points,
+                temp=H.temp,
+                tkwargs=H.tkwargs
+            )
+            assert torch.all(
+                torch.isclose(
+                    states, H._states, atol=1e-3
+                )
+            )
+
+            # test fitting
+            H.fitting()
+            with pytest.raises(HysteresisError):
+                H(h_data)
+
+            # test data
+            h_test = torch.rand(10) + min(h_data)
+
+            # test regression
+            H.regression()
+            res = H(h_test)
+            assert res.shape == h_test.shape
+
+            # test future
+            H.future()
+            res = H(h_test)
+            assert res.shape == h_test.shape
+
+            # test next
+            H.next()
+            res = H(h_test.reshape(-1, 1, 1))
+            assert res.shape == h_test.reshape(-1, 1, 1).shape
 
     def test_autograd(self):
         h_data = torch.linspace(-1, 10.0)
@@ -151,4 +213,9 @@ class TestBaseHysteresis:
     def test_valid_domain(self):
         h_data = torch.linspace(-1, 10.0)
         H = BaseHysteresis(train_h=h_data)
-        assert torch.equal(H.valid_domain, torch.tensor((-1, 10.0)).double())
+        assert torch.equal(H.valid_domain, torch.tensor((-1, 10.0)))
+
+    def test_save_load(self):
+        h_data = torch.linspace(-1, 10.0)
+        m_data = torch.linspace(-10.0, 10.0)
+        H = BaseHysteresis(h_data, m_data, mesh_scale=0.1)

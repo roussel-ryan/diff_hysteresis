@@ -12,7 +12,7 @@ class Polynomial(Module):
 
     def forward(self, x):
         xx = x.unsqueeze(-1).pow(self.p.to(x))
-        return self.bias.to(x) + self.weights.to(x) @ xx.T
+        return self.bias.to(x) + self.weights.to(x) @ torch.transpose(xx, -1, -2)
 
 
 if __name__ == '__main__':

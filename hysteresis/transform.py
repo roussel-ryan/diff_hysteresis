@@ -26,6 +26,9 @@ class HysteresisTransform(Module):
         else:
             self._poly_fit = Polynomial(self.polynomial_degree)
 
+    def freeze(self):
+        self._poly_fit.requires_grad_(False)
+
     def update_all(self, train_h, train_m):
         self.update_h_transform(train_h)
         self.update_m_transform(train_h, train_m)
@@ -44,16 +47,28 @@ class HysteresisTransform(Module):
         self._max_h = torch.max(train_h)
 
     def _norm_h(self, h):
-        return (h - self._min_h) / (self._max_h - self._min_h)
+        if self._max_h is None and self._min_h is None:
+            return h
+        else:
+            return (h - self._min_h) / (self._max_h - self._min_h)
 
     def _unnorm_h(self, hn):
-        return hn * (self._max_h - self._min_h) + self._min_h
+        if self._max_h is None and self._min_h is None:
+            return hn
+        else:
+            return hn * (self._max_h - self._min_h) + self._min_h
 
     def _norm_m(self, m):
-        return (m - self._min_m) / (self._max_m - self._min_m)
+        if self._max_m is None and self._min_m is None:
+            return m
+        else:
+            return (m - self._min_m) / (self._max_m - self._min_m)
 
     def _unnorm_m(self, mn):
-        return mn * (self._max_m - self._min_m) + self._min_m
+        if self._max_m is None and self._min_m is None:
+            return mn
+        else:
+            return mn * (self._max_m - self._min_m) + self._min_m
 
     def get_valid_domain(self):
         return torch.tensor((self._min_h, self._max_h))

@@ -1,11 +1,12 @@
 
-REGRESSION = 0
-NEXT = 1
-FUTURE = 2
+FITTING = 0
+REGRESSION = 1
+NEXT = 2
+FUTURE = 3
 
 
 class ModeEvaluator:
-    _mode = REGRESSION
+    _mode = FITTING
 
     @property
     def mode(self):
@@ -13,8 +14,11 @@ class ModeEvaluator:
 
     @mode.setter
     def mode(self, value):
-        assert value in [REGRESSION, NEXT, FUTURE]
+        assert value in [REGRESSION, NEXT, FUTURE, FITTING]
         self._mode = value
+
+    def fitting(self):
+        self._mode = FITTING
 
     def regression(self):
         self._mode = REGRESSION

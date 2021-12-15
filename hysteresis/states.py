@@ -15,10 +15,10 @@ def sweep_left(h, mesh, initial_state, T=1e-2):
     )
 
 
-def switch(h, m, T=1e-4):
+def switch(h, mesh, T=1e-4):
     # note that + T is needed to satisfy boundary conditions (creating a bit of delay
     # before the flip starts happening
-    return 1.0 + torch.tanh((h - m + T) / T)
+    return 1.0 + torch.tanh((h - mesh + T) / T)
 
 
 def predict_batched_state(h, mesh_points, current_state, current_field):

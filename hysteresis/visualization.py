@@ -4,7 +4,7 @@ import torch
 from hysteresis.base import BaseHysteresis
 
 
-def plot_hysteresis_density(H: BaseHysteresis, density=None):
+def plot_hysterion_density(H: BaseHysteresis, density=None):
     fig, ax = plt.subplots()
     x = H.mesh_points[:, 0]
     y = H.mesh_points[:, 1]
