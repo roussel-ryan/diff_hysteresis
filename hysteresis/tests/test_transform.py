@@ -32,10 +32,6 @@ class TestHysteresisTransform:
                 rtol=0.01
             ))
 
-        plt.plot(train_h, train_m, 'o')
-        plt.plot(train_h, t2.get_fit(train_h))
-        plt.show()
-
         assert torch.all(
             torch.isclose(
                 train_m, t2.get_fit(train_h),

@@ -15,26 +15,24 @@ class TestHysteresisTransform:
         # just transform / un-transform h
         assert torch.all(
             torch.isclose(
-                ht.transform(train_h)[:100],
+                ht.transform(train_h)[0][:100],
                 torch.linspace(0, 1)
             )
         )
 
         assert torch.all(
             torch.isclose(
-                ht.untransform(torch.linspace(0, 1.0)),
+                ht.untransform(torch.linspace(0, 1.0))[0],
                 train_h[:100]
             )
         )
 
         # test fitting
-        assert torch.all(
-            torch.isclose(
+        assert torch.allclose(
                 train_m,
-                ht.poly_fit(train_h).detach(),
-                atol=1e-2
+                ht.get_fit(train_h).detach(),
+                atol=1e-1
             )
-        )
 
         # test full circle
         test_h = torch.rand(10)

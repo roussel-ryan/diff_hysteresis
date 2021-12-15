@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from hysteresis.base import BaseHysteresis, HysteresisError
-from hysteresis.modes import NEXT, FUTURE, REGRESSION
+from hysteresis.modes import NEXT, FUTURE, REGRESSION, FITTING
 from hysteresis.states import get_states
 
 
@@ -84,7 +84,7 @@ class TestBaseHysteresis:
 
         # predict real values with training
         m_pred = H(h_data, return_real=True)
-        assert H.mode == REGRESSION
+        assert H.mode == FITTING
         assert m_pred.shape == torch.Size([20])
         assert torch.all(torch.isclose(m_data.double(), m_pred, rtol=1e-2))
 

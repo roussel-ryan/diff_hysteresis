@@ -9,10 +9,15 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 
 from hysteresis.base import BaseHysteresis, HysteresisError
 from hysteresis.hybrid import ExactHybridGP
+import hysteresis
+import os
 
 
 def load():
-    aps_model = torch.load('aps_model.pt')
+    aps_model = torch.load(
+        os.path.join(
+            hysteresis.__file__.split('__init__')[0],
+            'tests', 'aps_model.pt'))
 
     train_h = aps_model.history_h.reshape(-1, 1)
     train_m = aps_model.history_m.reshape(-1, 1)

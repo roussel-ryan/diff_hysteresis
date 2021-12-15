@@ -3,7 +3,7 @@ import pyro
 import torch
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoMultivariateNormal, AutoDelta, AutoNormal
-from hysteresis.modes import REGRESSION
+from hysteresis.modes import FITTING
 import logging
 
 logger = logging.getLogger(__name__)
@@ -31,14 +31,14 @@ def train_MSE(model, train_x, train_y, n_steps, lr=0.1, atol=1.0e-8):
 
 
 def train_hysteresis(model, n_steps, lr=0.1, atol=1e-8):
-    model.mode = REGRESSION
+    model.mode = FITTING
     train_x = model.history_h
     train_y = model.transformer.transform(model.history_h, model.history_m)[1]
     return train_MSE(model, train_x, train_y, n_steps, lr=lr, atol=atol)
 
 
 def train_bayes(model, num_steps, guide=None, initial_lr=0.001, gamma=0.1):
-    assert model.mode == REGRESSION
+    assert model.mode == FITTING
 
     guide = guide or AutoNormal(model)
 

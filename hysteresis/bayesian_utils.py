@@ -19,13 +19,15 @@ def predict(h, model, guide, num_samples=500):
         model,
         guide=guide,
         num_samples=num_samples,
-        return_sites=["_RETURN", "obs", "_raw_hysterion_density", "scale", "offset",
+        return_sites=["_RETURN", "obs", "raw_hysterion_density", "scale", "offset",
                       "slope"],
     )
 
     samples = predictive(h, return_real=True)
-    samples['density'] = torch.nn.Softplus()(samples["_raw_hysterion_density"])
-    del samples["_raw_hysterion_density"]
+    samples['density'] = model.raw_hysterion_density.constraint.inverse_transform(
+        samples["raw_hysterion_density"]
+    )
+    del samples["raw_hysterion_density"]
     pred_summary = summary(samples)
     return pred_summary, samples
 

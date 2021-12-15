@@ -1,7 +1,7 @@
 from torchAccelerator.hysteresis import HysteresisQuad, HysteresisAccelerator
 from torchAccelerator.first_order import TorchQuad, TorchDrift, TorchAccelerator
-from hysteresis.base import TorchHysteresis
-from hysteresis.visualization import plot_hysteresis_density
+from hysteresis.base import BaseHysteresis
+from hysteresis.visualization import plot_hysterion_density
 import torch
 import matplotlib.pyplot as plt
 
@@ -31,7 +31,7 @@ class TestHysteresisQuad:
     def test_hysteresis_quad(self):
         with torch.autograd.detect_anomaly():
             h_data = torch.linspace(0, 1.0, 10)
-            H = TorchHysteresis(h_data, mesh_scale=0.1)
+            H = BaseHysteresis(h_data, mesh_scale=0.1)
             HQ = HysteresisQuad("Q1", torch.tensor(1.0), H, scale=torch.tensor(1.0))
 
             # test gradient for calculating the transport matrix from magnetization
@@ -78,7 +78,7 @@ class TestHysteresisQuad:
     def test_autograd_w_applied_fields(self):
         with torch.autograd.detect_anomaly():
             h_data = torch.linspace(0, 1.0, 10)
-            H = TorchHysteresis(h_data, mesh_scale=0.1)
+            H = BaseHysteresis(h_data, mesh_scale=0.1)
             HQ = HysteresisQuad("Q1", torch.tensor(1.0), H, scale=torch.tensor(1.0))
 
             # apply new field
