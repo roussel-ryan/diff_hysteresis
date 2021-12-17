@@ -23,6 +23,11 @@ class ExactHybridGP(ExactGP, GPyTorchModel, ModeModule):
         if train_x.shape[0] != train_y.shape[0]:
             raise ValueError("train_x and train_y must have the same number of samples")
 
+        if len(train_y.shape) != 1:
+            raise ValueError(
+                "multi output models are not supported, train_y must be " "a 1D tensor"
+            )
+
         if not isinstance(hysteresis_models, list):
             self.hysteresis_models = torch.nn.ModuleList([hysteresis_models])
         else:
@@ -95,11 +100,6 @@ class ExactHybridGP(ExactGP, GPyTorchModel, ModeModule):
         self.eval()
 
     def forward(self, X, from_magnetization=False):
-        if self.mode != FITTING:
-            self.eval()
-        else:
-            self.train()
-
         if X.shape[-1] != len(self.hysteresis_models):
             raise ValueError("test data must match the number of hysteresis models")
 
@@ -137,7 +137,7 @@ class ExactHybridGP(ExactGP, GPyTorchModel, ModeModule):
                     eval_x = X[len(self.train_inputs[0]) :]
 
                 eval_m = self.get_magnetization(eval_x, mode=self.mode)
-                total_m = torch.vstack((train_m, eval_m.reshape(-1, 1)))
+                total_m = torch.vstack((train_m, eval_m.reshape(-1, train_m.shape[1])))
 
         mean_m = self.mean_module(total_m)
         covar_m = self.covar_module(total_m)

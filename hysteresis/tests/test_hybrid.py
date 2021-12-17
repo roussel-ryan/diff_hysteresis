@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import gpytorch.distributions
 import pytest
 import torch
@@ -32,10 +34,12 @@ class TestExactHybridGP:
         pred_m = H(train_x.flatten(), return_real=True)
         likelihood = GaussianLikelihood()
 
-        model = ExactHybridGP(train_x, train_y, H, likelihood)
+        with pytest.raises(ValueError):
+            model = ExactHybridGP(train_x, train_y, H, likelihood)
+        model = ExactHybridGP(train_x, train_y.flatten(), H, likelihood)
 
         assert torch.allclose(model.train_inputs[0].squeeze(), train_x.squeeze())
-        assert torch.allclose(model.train_targets, train_y)
+        assert torch.allclose(model.train_targets, train_y.flatten())
 
     def test_train(self):
         train_x, train_m, train_y = load()
@@ -83,4 +87,50 @@ class TestExactHybridGP:
 
         # try to optimize
         bounds = torch.tensor([min(train_x), max(train_x)]).reshape(2, 1)
+        candidate, _ = optimize_acqf(acq, bounds, 1, 1, 1)
+
+    def test_multiple_magents(self):
+        train_x, train_m, train_y = load()
+        H = BaseHysteresis(train_x.flatten())
+        likelihood = GaussianLikelihood()
+
+        with pytest.raises(ValueError):
+            h_list = [H, H, H]
+            model = ExactHybridGP(train_x, train_y, h_list, likelihood)
+
+        h_list = [deepcopy(H), deepcopy(H), deepcopy(H)]
+        with pytest.raises(ValueError):
+            model = ExactHybridGP(train_x, train_y, h_list, likelihood)
+
+        train_x = train_x.expand(61, 3)
+        model = ExactHybridGP(train_x, train_y.flatten(), h_list, likelihood)
+
+        # test fitting eval
+        result = model(train_x)
+        assert isinstance(result, gpytorch.distributions.MultivariateNormal)
+
+        # test regression eval
+        model.regression()
+        test_x = torch.rand(6, 3).double() + min(train_x[0])
+        result = model(test_x)
+
+        # test forward eval
+        model.future()
+        result = model(test_x)
+
+        # test next eval
+        model.next()
+        result = model(test_x.unsqueeze(-2))
+
+        acq = UpperConfidenceBound(model, beta=0.1)
+        acq(test_x.unsqueeze(-2))
+
+        # try to optimize
+        bounds = torch.tensor(
+            [
+                [min(train_x[0]), max(train_x[0])],
+                [min(train_x[0]), max(train_x[0])],
+                [min(train_x[0]), max(train_x[0])],
+            ]
+        ).reshape(2, 3)
         candidate, _ = optimize_acqf(acq, bounds, 1, 1, 1)
