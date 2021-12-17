@@ -98,37 +98,40 @@ class TorchQuad(Module):
         return self.get_matrix(self.K1)
 
     def get_matrix(self, K1):
-        M = torch.eye(6)
 
-        if K1 < 0.0:
-            K1 = -K1
-            flip = True
-        elif K1 > 0.0:
-            K1 = K1
-            flip = False
-        else:
-            M = torch.eye(6)
-            M[0, 1] = self.L
-            M[2, 3] = self.L
-            return M
+        # add small deviation if K1 is zero
+        K1 = torch.where(torch.abs(K1) < 1e-6, K1 + 1e-6, K1)
 
-        k = torch.sqrt(K1)
+        M = torch.empty(*K1.shape, 6, 6)
+        M[..., :, :] = torch.eye(6)
+
+        mag_K1 = torch.where(K1 < 0.0, -K1, K1)
+
+        k = torch.sqrt(mag_K1)
 
         kl = self.L * k
-        M[0, 0] = torch.cos(kl)
-        M[0, 1] = torch.sin(kl) / k
-        M[1, 0] = -k * torch.sin(kl)
-        M[1, 1] = torch.cos(kl)
+        M[..., 0, 0] = torch.cos(kl)
+        M[..., 0, 1] = torch.sin(kl) / k
+        M[..., 1, 0] = -k * torch.sin(kl)
+        M[..., 1, 1] = torch.cos(kl)
 
-        M[2, 2] = torch.cosh(kl)
-        M[2, 3] = torch.sinh(kl) / k
-        M[3, 2] = k * torch.sinh(kl)
-        M[3, 3] = torch.cosh(kl)
+        M[..., 2, 2] = torch.cosh(kl)
+        M[..., 2, 3] = torch.sinh(kl) / k
+        M[..., 3, 2] = k * torch.sinh(kl)
+        M[..., 3, 3] = torch.cosh(kl)
 
-        if flip:
-            M = rot(-np.pi / 2) @ M @ rot(np.pi / 2)
+        M_rot = torch.matmul(torch.matmul(rot(-np.pi / 2), M), rot(np.pi / 2))
 
-        return M
+        # expand array to make >0 comparison, don't try this at home kids
+        K1_test = (
+            K1.unsqueeze(-1)
+            .repeat_interleave(6, dim=-1)
+            .unsqueeze(-1)
+            .repeat_interleave(6, dim=-1)
+        )
+        M_final = M * (K1_test >= 0.0).float() + M_rot * (K1_test < 0.0).float()
+
+        return M_final
 
 
 class TorchDrift(Module):

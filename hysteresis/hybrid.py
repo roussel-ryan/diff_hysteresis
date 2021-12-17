@@ -9,10 +9,10 @@ from gpytorch.models import ExactGP
 from torch import Tensor
 
 from hysteresis.base import HysteresisError
-from hysteresis.modes import ModeEvaluator, NEXT, REGRESSION, FITTING
+from hysteresis.modes import ModeModule, NEXT, REGRESSION, FITTING
 
 
-class ExactHybridGP(ExactGP, GPyTorchModel, ModeEvaluator):
+class ExactHybridGP(ExactGP, GPyTorchModel, ModeModule):
     _num_outputs = 1
 
     def __init__(self, train_x: Tensor, train_y: Tensor, hysteresis_models, likelihood):

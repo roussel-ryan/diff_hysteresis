@@ -4,35 +4,28 @@ import torch
 from torch import Tensor
 from .first_order import TorchQuad, TorchAccelerator
 from typing import Dict
+from hysteresis.modes import ModeModule
+from hysteresis.base import BaseHysteresis
 
 
-class HysteresisMagnet(Module, ABC):
-    def __init__(self, name, L: Tensor, hysteresis_model):
+class HysteresisMagnet(ModeModule, ABC):
+    def __init__(self, name, L: Tensor, hysteresis_model: BaseHysteresis):
         Module.__init__(self)
         self.name = name
         self.hysteresis_model = hysteresis_model
         self.L = L
 
     def apply_field(self, H: Tensor):
-        self.hysteresis_model.applied_fields = torch.cat(
-            (self.hysteresis_model.applied_fields, H.reshape(1))
-        )
+        self.hysteresis_model.apply_field(H)
 
-    def get_transport_matrix(self):
-        m = self.hysteresis_model.predict_magnetization_from_applied_fields()
-        m_last = m[-1] if m.shape else m
-        return self._calculate_beam_matrix(m_last)
-
-    def get_fantasy_transport_matrix(self, h_fantasy):
-        m = self.hysteresis_model.predict_magnetization_next(h_fantasy)
+    def get_transport_matrix(self, X: Tensor):
+        self.hysteresis_model.mode = self.mode
+        m = self.hysteresis_model(X)
         return self._calculate_beam_matrix(m)
 
-    def get_magnetization_history(self):
-        return self.hysteresis_model.predict_magnetization_from_applied_fields()
-
-    def forward(self):
+    def forward(self, X: Tensor):
         """Returns the current transport matrix"""
-        return self.get_transport_matrix()
+        return self.get_transport_matrix(X)
 
     @abstractmethod
     def _calculate_beam_matrix(self, m: Tensor):

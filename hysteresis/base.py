@@ -7,7 +7,7 @@ from typing import Dict, Callable
 from .meshing import create_triangle_mesh, default_mesh_size
 from .states import get_states, predict_batched_state
 from .transform import HysteresisTransform
-from .modes import ModeEvaluator, REGRESSION, NEXT, FUTURE, FITTING
+from .modes import ModeModule, REGRESSION, NEXT, FUTURE, FITTING
 
 import logging
 
@@ -18,7 +18,7 @@ class HysteresisError(Exception):
     pass
 
 
-class BaseHysteresis(Module, ModeEvaluator):
+class BaseHysteresis(Module, ModeModule):
     def __init__(
         self,
         train_h: Tensor = None,
@@ -136,8 +136,17 @@ class BaseHysteresis(Module, ModeEvaluator):
     def forward(self, x: Tensor, return_real=False):
         x = x.to(**self.tkwargs)
         self._check_inside_valid_domain(x)
+
+        # get current state/field if available
+        if hasattr(self, "history_h"):
+            current_fld = self._history_h[-1]
+            current_state = self._states[-1]
+        else:
+            current_state = None
+            current_fld = None
+
         if self._mode == FITTING:
-            if not hasattr(self, "_history_h"):
+            if not hasattr(self, "history_h"):
                 raise RuntimeError(
                     "no training data supplied to do regression! Try "
                     "using FUTURE mode instead OR set data using "
@@ -167,8 +176,8 @@ class BaseHysteresis(Module, ModeEvaluator):
             states = get_states(
                 norm_h,
                 self.mesh_points,
-                current_state=self._states[-1],
-                current_field=self._history_h[-1],
+                current_state=current_state,
+                current_field=current_fld,
                 tkwargs=self.tkwargs,
                 temp=self.temp,
             )
@@ -184,8 +193,10 @@ class BaseHysteresis(Module, ModeEvaluator):
             states = predict_batched_state(
                 norm_h,
                 self.mesh_points,
-                current_state=self._states[-1],
-                current_field=self._history_h[-1],
+                current_state=current_state,
+                current_field=current_fld,
+                tkwargs=self.tkwargs,
+                temp=self.temp,
             )
 
         else:

@@ -19,13 +19,37 @@ def switch(h, mesh, T=1e-4):
     return 1.0 + torch.tanh((h - mesh + T) / T)
 
 
-def predict_batched_state(h, mesh_points, current_state, current_field):
+def get_current(current_state, current_field, n_mesh_points, **tkwargs):
+    # list of hysteresis states with initial state set
+    if current_state is None:
+        initial_state = torch.ones(n_mesh_points, **tkwargs) * -1.0
+        initial_field = torch.zeros(1)
+    else:
+        if not isinstance(current_field, torch.Tensor):
+            raise ValueError("need to specify current field if state is given")
+        if current_state.shape[-1] != n_mesh_points:
+            raise ValueError("curret state must match number of mesh points")
+        initial_state = current_state
+        initial_field = current_field
+    return initial_state, initial_field
+
+
+def predict_batched_state(
+    h,
+    mesh_points,
+    current_state=None,
+    current_field=None,
+    tkwargs=None,
+    temp=1e-3,
+):
     """
     Speed up optimization by calculating a batched future state given a batch of h
     values.
 
     Parameters
     ----------
+    temp
+    tkwargs
     h
     mesh_points
     current_state
@@ -35,11 +59,15 @@ def predict_batched_state(h, mesh_points, current_state, current_field):
     -------
 
     """
+    n_mesh_points = mesh_points.shape[0]
+    tkwargs = tkwargs or {}
+
+    state, field = get_current(current_state, current_field, n_mesh_points, **tkwargs)
 
     result = torch.where(
-        torch.greater_equal(h - current_field, torch.zeros(1).to(h)),
-        sweep_up(h, mesh_points, current_state),
-        sweep_left(h, mesh_points, current_state),
+        torch.greater_equal(h - field, torch.zeros(1).to(h)),
+        sweep_up(h, mesh_points, state, temp),
+        sweep_left(h, mesh_points, state, temp),
     )
     return result
 
@@ -99,14 +127,9 @@ def get_states(
     tkwargs = tkwargs or {}
 
     # list of hysteresis states with initial state set
-    if current_state is None:
-        initial_state = torch.ones(n_mesh_points, **tkwargs) * -1.0
-        initial_field = torch.zeros(1)
-    else:
-        assert isinstance(current_field, torch.Tensor)
-        assert current_state.shape[-1] == n_mesh_points
-        initial_state = current_state
-        initial_field = current_field
+    initial_state, initial_field = get_current(
+        current_state, current_field, n_mesh_points, **tkwargs
+    )
 
     states = []
 

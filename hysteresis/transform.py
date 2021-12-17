@@ -72,7 +72,10 @@ class HysteresisTransform(Module):
             return mn * (self._max_m - self._min_m) + self._min_m
 
     def get_valid_domain(self):
-        return torch.tensor((self._min_h, self._max_h))
+        if self._max_h is None and self._min_h is None:
+            return torch.tensor((0.0, 1.0))
+        else:
+            return torch.tensor((self._min_h, self._max_h))
 
     def update_m_transform(self, train_h, train_m):
         self._min_m = torch.min(train_m)

@@ -75,7 +75,7 @@ class TestStateCalc:
     def test_batched(self):
         mesh = torch.tensor(create_triangle_mesh(0.5))
         current_state = torch.ones(mesh.shape[0]) * -1.0
-        current_field = -0.01
+        current_field = torch.tensor(-0.01)
         h = torch.linspace(0.0, 1.0, 20, requires_grad=True)
         out = predict_batched_state(
             h.reshape(20, 1, 1), mesh, current_state, current_field

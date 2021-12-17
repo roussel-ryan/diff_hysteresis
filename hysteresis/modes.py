@@ -1,10 +1,12 @@
+from torch.nn import Module
+
 FITTING = 0
 REGRESSION = 1
 NEXT = 2
 FUTURE = 3
 
 
-class ModeEvaluator:
+class ModeModule(Module):
     _mode = FITTING
 
     @property
@@ -15,15 +17,18 @@ class ModeEvaluator:
     def mode(self, value):
         assert value in [REGRESSION, NEXT, FUTURE, FITTING]
         self._mode = value
+        for ele in self.children():
+            if isinstance(ele, ModeModule):
+                ele.mode = value
 
     def fitting(self):
-        self._mode = FITTING
+        self.mode = FITTING
 
     def regression(self):
-        self._mode = REGRESSION
+        self.mode = REGRESSION
 
     def next(self):
-        self._mode = NEXT
+        self.mode = NEXT
 
     def future(self):
-        self._mode = FUTURE
+        self.mode = FUTURE

@@ -14,7 +14,7 @@ train_h = torch.linspace(-10.0, 10.0, 20)
 train_h = torch.cat((train_h, train_h.flipud()))
 
 # add on a decaying scan
-f = 2
+f = 4
 decay_t = torch.linspace(0, 1, 5 * f)
 decay_h = -10.0 * (1 - decay_t) * torch.cos(2 * 3.14 * f * decay_t)
 train_h = torch.cat((train_h, decay_h))

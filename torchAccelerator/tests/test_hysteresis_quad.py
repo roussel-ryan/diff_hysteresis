@@ -13,7 +13,7 @@ def density_function(mesh_pts):
 
 
 class TestHysteresisQuad:
-    def test_quad_grad(self):
+    def test_normal_quad_grad(self):
         Q = TorchQuad("q1", torch.tensor(1.0), torch.tensor(1.0))
         M = Q.forward()
         M[0, 0].backward()
@@ -29,6 +29,14 @@ class TestHysteresisQuad:
         M[0, 0].backward()
 
     def test_hysteresis_quad(self):
+        H = BaseHysteresis(mesh_scale=0.1)
+        HQ = HysteresisQuad("Q1", torch.tensor(1.0), H, scale=torch.tensor(1.0))
+
+        # test in next mode
+        HQ.next()
+        result = HQ(torch.rand(3, 1, 1))
+
+    def test_hysteresis_quad_grad(self):
         with torch.autograd.detect_anomaly():
             h_data = torch.linspace(0, 1.0, 10)
             H = BaseHysteresis(h_data, mesh_scale=0.1)
@@ -51,29 +59,17 @@ class TestHysteresisQuad:
             assert not torch.isnan(x.grad)
 
             # test calculating magnetization
+            HQ.future()
             x = torch.tensor(0.0, requires_grad=True)
-            m = HQ.hysteresis_model.predict_magnetization(h=x)
+            m = HQ.hysteresis_model(torch.atleast_1d(x))
             m[0].backward()
             assert not torch.isnan(x.grad)
 
             # test gradient for calculating the transport matrix from applied field
             x = torch.tensor(0.2, requires_grad=True)
-            matrix = HQ.get_transport_matrix(x)
-            matrix[0, 0].backward()
+            matrix = HQ.get_transport_matrix(torch.atleast_1d(x))
+            matrix[0, 0, 0].backward()
             assert not torch.isnan(x.grad)
-
-            HQ.fantasy_H.data = torch.tensor(0.5)
-            matrix = HQ.forward()
-            matrix[1, 0].backward()
-            assert not torch.isnan(HQ.fantasy_H.grad)
-            auto_diff_grad = HQ.fantasy_H.grad.clone()
-
-            # check against numerical gradient
-            dx = torch.tensor(0.0001)
-            HQ.fantasy_H.data = torch.tensor(0.5) + dx
-            matrix_dx = HQ.forward()
-            approx = (matrix_dx[1, 0] - matrix[1, 0]) / dx
-            assert torch.isclose(auto_diff_grad, approx, rtol=0.05)
 
     def test_autograd_w_applied_fields(self):
         with torch.autograd.detect_anomaly():
@@ -84,11 +80,3 @@ class TestHysteresisQuad:
             # apply new field
             new_H = torch.tensor(0.5)
             HQ.apply_field(new_H)
-
-            # calculate grad
-            HQ.fantasy_H.data = torch.tensor(0.5)
-            matrix = HQ.forward()
-            matrix[1, 0].backward()
-            assert not torch.isnan(HQ.fantasy_H.grad)
-            print(HQ.fantasy_H.grad)
-            print(HQ.fantasy_H)

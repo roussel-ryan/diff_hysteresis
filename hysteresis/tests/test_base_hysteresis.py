@@ -8,7 +8,7 @@ from hysteresis.states import get_states
 
 class TestBaseHysteresis:
     def test_empty(self):
-        h_data = torch.rand(10) * 10.0
+        h_data = torch.rand(10)
         m_data = torch.rand(10)
 
         H = BaseHysteresis()
@@ -18,11 +18,18 @@ class TestBaseHysteresis:
         H = BaseHysteresis()
         H.set_history(h_data, m_data)
 
+        # try setting protected variables
         H2 = BaseHysteresis()
         with pytest.raises(AttributeError):
             H2.history_h = h_data
         with pytest.raises(AttributeError):
             H2.history_m = m_data
+
+        H2.future()
+        H2(h_data)
+
+        H2.next()
+        H2(h_data.reshape(-1, 1, 1))
 
     def test_constraints(self):
         H = BaseHysteresis()

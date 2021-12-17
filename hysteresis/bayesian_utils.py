@@ -30,10 +30,10 @@ def predict(h, model, guide, num_samples=500):
     )
 
     samples = predictive(h, return_real=True)
-    samples["density"] = model.raw_hysterion_density.constraint.inverse_transform(
-        samples["raw_hysterion_density"]
-    )
-    del samples["raw_hysterion_density"]
+    # samples["density"] = model.raw_hysterion_density.constraint.inverse_transform(
+    #    samples["raw_hysterion_density"]
+    # )
+    # del samples["raw_hysterion_density"]
     pred_summary = summary(samples)
     return pred_summary, samples
 
