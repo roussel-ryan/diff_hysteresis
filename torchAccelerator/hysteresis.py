@@ -4,7 +4,7 @@ import torch
 from torch import Tensor
 from .first_order import TorchQuad, TorchAccelerator
 from typing import Dict
-from hysteresis.modes import ModeModule
+from hysteresis.modes import ModeModule, CURRENT
 from hysteresis.base import BaseHysteresis
 
 
@@ -19,11 +19,19 @@ class HysteresisMagnet(ModeModule, ABC):
         self.hysteresis_model.apply_field(H)
 
     def get_transport_matrix(self, X: Tensor):
-        self.hysteresis_model.mode = self.mode
-        m = self.hysteresis_model(X)
-        return self._calculate_beam_matrix(m)
+        if isinstance(X, Tensor):
+            self.hysteresis_model.mode = self.mode
+            m = self.hysteresis_model(X)
+            return self._calculate_beam_matrix(m)
 
-    def forward(self, X: Tensor):
+        else:
+            self.hysteresis_model.mode = CURRENT
+            m = self.hysteresis_model()   
+            return self._calculate_beam_matrix(m).squeeze()
+
+            
+
+    def forward(self, X: Tensor = None):
         """Returns the current transport matrix"""
         return self.get_transport_matrix(X)
 

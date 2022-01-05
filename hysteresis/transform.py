@@ -5,21 +5,35 @@ from hysteresis.training import train_MSE
 
 
 class HysteresisTransform(Module):
-    _min_h = None
-    _max_h = None
     _min_m = None
     _max_m = None
     _offset_m = torch.zeros(1)
     _scale_m = torch.ones(1)
-
+    _fixed_domain = False
+    _domain = torch.tensor((0.0, 1.0))
+    _mrange = torch.tensor((0.0, 1.0))
+    
     def __init__(
-        self, train_h, train_m=None, polynomial_degree=5, polynomial_fit_iterations=5000
+        self, 
+        train_h=None, 
+        train_m=None,
+        fixed_domain=None,
+        polynomial_degree=5, 
+        polynomial_fit_iterations=5000
     ):
         super(HysteresisTransform, self).__init__()
         self.polynomial_degree = polynomial_degree
         self.polynomial_fit_iterations = polynomial_fit_iterations
-
-        if isinstance(train_m, torch.Tensor) and isinstance(train_h, torch.Tensor):
+        
+        # set fixed domain if specified
+        if isinstance(fixed_domain, torch.Tensor):
+            self.set_fixed_domain(fixed_domain)
+        
+        if isinstance(
+            train_m, torch.Tensor
+        ) and isinstance(
+            train_h, torch.Tensor
+        ):
             self.update_all(train_h, train_m)
         elif isinstance(train_h, torch.Tensor):
             self.update_h_transform(train_h)
@@ -27,6 +41,41 @@ class HysteresisTransform(Module):
         else:
             self._poly_fit = Polynomial(self.polynomial_degree)
 
+    def set_fixed_domain(self, domain):
+        self._domain = domain
+        self._fixed_domain = True        
+            
+    @property
+    def domain(self):
+        return self._domain
+    
+    @domain.setter
+    def domain(self, value):
+        if self._fixed_domain:
+            raise RuntimeError('cannot set new domain when fixed domain is specified!')
+        else:
+            if value.shape != torch.Size([2]) or (value[1] < value[0]):
+                raise RuntimeError('domain value misspecified')
+        self._domain = value
+       
+    @property
+    def domain_width(self):
+        return self.domain[1] - self.domain[0]
+    
+    @property
+    def mrange(self):
+        return self._mrange
+    
+    @mrange.setter
+    def mrange(self, value):
+        if value.shape != torch.Size([2]) or (value[1] < value[0]):
+            raise RuntimeError('domain value misspecified')
+        self._mrange = value
+        
+    @property
+    def mrange_width(self):
+        return self.mrange[1] - self.mrange[0]
+            
     def freeze(self):
         self._poly_fit.requires_grad_(False)
 
@@ -41,46 +90,32 @@ class HysteresisTransform(Module):
         """do polynomial fitting on normalized train_h and train_m"""
         self._poly_fit = Polynomial(self.polynomial_degree)
         train_MSE(self._poly_fit, hn, mn, self.polynomial_fit_iterations)
-        self._poly_fit.requires_grad_(False)
-
+        self._poly_fit.requires_grad_(False)        
+        
     def update_h_transform(self, train_h):
-        self._min_h = torch.min(train_h)
-        self._max_h = torch.max(train_h)
+        if not self._fixed_domain:
+            self.domain = torch.tensor((
+                torch.min(train_h),
+                torch.max(train_h)
+            ))
 
     def _norm_h(self, h):
-        if self._max_h is None and self._min_h is None:
-            return h
-        else:
-            return (h - self._min_h) / (self._max_h - self._min_h)
+        return (h - self.domain[0]) / self.domain_width
 
     def _unnorm_h(self, hn):
-        if self._max_h is None and self._min_h is None:
-            return hn
-        else:
-            return hn * (self._max_h - self._min_h) + self._min_h
+        return hn * self.domain_width + self.domain[0]
 
     def _norm_m(self, m):
-        if self._max_m is None and self._min_m is None:
-            return m
-        else:
-            return (m - self._min_m) / (self._max_m - self._min_m)
+        return (m - self.mrange[0]) / self.mrange_width
 
     def _unnorm_m(self, mn):
-        if self._max_m is None and self._min_m is None:
-            return mn
-        else:
-            return mn * (self._max_m - self._min_m) + self._min_m
-
-    def get_valid_domain(self):
-        if self._max_h is None and self._min_h is None:
-            return torch.tensor((0.0, 1.0))
-        else:
-            return torch.tensor((self._min_h, self._max_h))
+        return mn * self.mrange_width + self.mrange[0]
 
     def update_m_transform(self, train_h, train_m):
-        self._min_m = torch.min(train_m)
-        self._max_m = torch.max(train_m)
-
+        self.mrange = torch.tensor((
+            min(train_m),
+            max(train_h)
+        ))
         self.update_fit(self._norm_h(train_h), self._norm_m(train_m))
 
         fit = self._unnorm_m(self._poly_fit(self._norm_h(train_h)))

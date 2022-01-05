@@ -4,6 +4,7 @@ FITTING = 0
 REGRESSION = 1
 NEXT = 2
 FUTURE = 3
+CURRENT = 4
 
 
 class ModeModule(Module):
@@ -15,7 +16,7 @@ class ModeModule(Module):
 
     @mode.setter
     def mode(self, value):
-        assert value in [REGRESSION, NEXT, FUTURE, FITTING]
+        assert value in [REGRESSION, NEXT, FUTURE, FITTING, CURRENT]
         self._mode = value
         for ele in self.children():
             if isinstance(ele, ModeModule):
@@ -32,3 +33,6 @@ class ModeModule(Module):
 
     def future(self):
         self.mode = FUTURE
+        
+    def current(self):
+        self.mode = CURRENT

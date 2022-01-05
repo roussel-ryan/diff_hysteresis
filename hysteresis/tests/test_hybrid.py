@@ -44,13 +44,56 @@ class TestExactHybridGP:
     def test_train(self):
         train_x, train_m, train_y = load()
         H = BaseHysteresis(train_x.flatten(), polynomial_degree=3)
-        for constraint_name, constraint in H.named_constraints():
-            print(f"Constraint name: {constraint_name:55} constraint = {constraint}")
+        
+        likelihood = GaussianLikelihood()
+        model = ExactHybridGP(train_x, train_y.flatten(), H, likelihood)
+        
+        assert torch.allclose(
+            model.hysteresis_models[0].history_h,
+            train_x.flatten()
+        )
+        mll = ExactMarginalLogLikelihood(likelihood, model)
+        fit_gpytorch_model(mll, options={"maxiter": 5})
+        
+        for name,val in model.named_parameters():
+            print(f'{name}:{val}')
+        
+        
+        # test training with fixed hysteresis model
+        H = BaseHysteresis(train_x.flatten(), polynomial_degree=3, trainable=False)
         likelihood = GaussianLikelihood()
         model = ExactHybridGP(train_x, train_y.flatten(), H, likelihood)
 
         mll = ExactMarginalLogLikelihood(likelihood, model)
         fit_gpytorch_model(mll, options={"maxiter": 5})
+       
+    
+        # train with random data inside bounds
+        likelihood = GaussianLikelihood()
+        model = ExactHybridGP(
+            torch.rand(10).unsqueeze(1).double() + torch.min(train_x),
+            torch.rand(10).double(),
+            H,
+            likelihood
+        )
+        
+        mll = ExactMarginalLogLikelihood(likelihood, model)
+        fit_gpytorch_model(mll, options={"maxiter": 5})
+        
+        
+        # train multi dim with random data
+        likelihood = GaussianLikelihood()
+        model = ExactHybridGP(
+            torch.rand(10, 3).double() + torch.min(train_x),
+            torch.rand(10).double(),
+            [deepcopy(H), deepcopy(H), deepcopy(H)],
+            likelihood
+        )
+        
+        mll = ExactMarginalLogLikelihood(likelihood, model)
+        fit_gpytorch_model(mll, options={"maxiter": 5})
+       
+
 
     def test_predict(self):
         train_x, train_m, train_y = load()

@@ -35,7 +35,7 @@ class TestBaseHysteresis:
         H = BaseHysteresis()
 
         with pytest.raises(RuntimeError):
-            H.offset = 200.0
+            H.offset = 20000.0
 
     def test_set_history(self):
         h_data = torch.rand(10) * 10.0
@@ -103,6 +103,20 @@ class TestBaseHysteresis:
 
         m_pred = H(h_data, return_real=True)
         assert m_pred.shape == h_data.shape
+        
+    def test_forward_current(self):
+        h_data = torch.linspace(-1.0, 10.0)
+        m_data = torch.linspace(-10.0, 10.0)
+        H = BaseHysteresis(h_data, m_data)
+        H.current()
+        result = H()
+        assert torch.isclose(result, torch.tensor(1.0, dtype=torch.float64), rtol=1e-3)
+        
+        # should throw error if no data specified
+        H2 = BaseHysteresis()
+        with pytest.raises(HysteresisError):
+            H2.current()
+            H2()
 
     def test_forward_future(self):
         h_data = torch.linspace(-1.0, 10.0)

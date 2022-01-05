@@ -4,6 +4,7 @@ import gpytorch.models
 import torch
 from botorch.models.gpytorch import GPyTorchModel
 from botorch.posteriors import GPyTorchPosterior
+from botorch.models.transforms.input import Normalize
 from gpytorch.distributions import MultivariateNormal
 from gpytorch.models import ExactGP
 from torch import Tensor
@@ -47,11 +48,23 @@ class ExactHybridGP(ExactGP, GPyTorchModel, ModeModule):
             raise ValueError("training data must match the number of hysteresis models")
 
         self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
+        self.covar_module = gpytorch.kernels.ScaleKernel(
+            gpytorch.kernels.MaternKernel(ard_num_dims = len(self.hysteresis_models))
+        )
 
         # set training data
         self.set_train_data(train_x, train_y, strict=False)
-
+        
+        # set hysteresis model history data
+        self._set_hysteresis_model_train_data(train_x)
+        
+        # initialize normalization transformer
+        self.normalize_m = Normalize(train_x.shape[-1])
+    
+    def _set_hysteresis_model_train_data(self, train_h):
+        for idx, hyst_model in enumerate(self.hysteresis_models):
+            hyst_model.set_history(train_h[:, idx])
+        
     def apply_fields(self, x: Tensor):
         for idx, hyst_model in enumerate(self.hysteresis_models):
             hyst_model.apply_field(x[:, idx])
@@ -90,6 +103,10 @@ class ExactHybridGP(ExactGP, GPyTorchModel, ModeModule):
     def next(self):
         super(ExactHybridGP, self).next()
         self.eval()
+        
+    def current(self):
+        super(ExactHybridGP, self).current()
+        self.eval()
 
     def future(self):
         super(ExactHybridGP, self).future()
@@ -109,7 +126,7 @@ class ExactHybridGP(ExactGP, GPyTorchModel, ModeModule):
             train_m = self.get_magnetization(self.train_inputs[0], mode=FITTING)
         else:
             # if X is not the same shape as train_inputs then we need to get the
-            # subvector - else just use training data
+            # subvector of test points - else just use training data
             if self.train_inputs[0].shape != X.shape:
                 # if we are using NEXT mode we need to get a single batch sample
                 if self.mode == NEXT:
@@ -138,8 +155,25 @@ class ExactHybridGP(ExactGP, GPyTorchModel, ModeModule):
 
                 eval_m = self.get_magnetization(eval_x, mode=self.mode)
                 total_m = torch.vstack((train_m, eval_m.reshape(-1, train_m.shape[1])))
-
-        mean_m = self.mean_module(total_m)
-        covar_m = self.covar_module(total_m)
+                
+        if self.training:
+            #create normalization for magnetic fields
+            bounds = torch.cat(
+                (
+                    torch.min(total_m, dim=0)[0].unsqueeze(1),
+                    torch.max(total_m, dim=0)[0].unsqueeze(1),
+                ),
+                dim=1,
+            ).T
+            
+            self.normalize_m = Normalize(total_m.shape[-1], bounds)
+        
+        if hasattr(self, 'normalize_m'):
+            new_total_m = self.normalize_m(total_m)    
+        else:
+            new_total_m = total_m
+                
+        mean_m = self.mean_module(new_total_m)
+        covar_m = self.covar_module(new_total_m)
 
         return MultivariateNormal(mean_m, covar_m)
