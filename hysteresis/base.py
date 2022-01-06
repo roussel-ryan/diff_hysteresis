@@ -76,15 +76,10 @@ class BaseHysteresis(Module, ModeModule):
         self.polynomial_fit_iterations = polynomial_fit_iterations
         self._fixed_domain = fixed_domain
 
-        # if training info is specified then set the history vars, otherwise specify
-        # an empty transformer
-        self.transformer = HysteresisTransform(
-            train_h,
-            train_m,
-            self._fixed_domain,
-            self.polynomial_degree,
-            self.polynomial_fit_iterations
-        )
+        # initialize with empty transformer
+        self.transformer = HysteresisTransform()
+
+        # if data is specified then set the history data and train transformer
         if isinstance(train_h, Tensor):
             self.set_history(train_h, train_m)
 
