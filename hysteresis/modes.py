@@ -18,6 +18,13 @@ class ModeModule(Module):
     def mode(self, value):
         assert value in [REGRESSION, NEXT, FUTURE, FITTING, CURRENT]
         self._mode = value
+
+        # if mode is FITTING set module to training
+        if value == FITTING:
+            self.train()
+        else:
+            self.eval()
+
         for ele in self.children():
             if isinstance(ele, ModeModule):
                 ele.mode = value

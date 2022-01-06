@@ -158,11 +158,6 @@ class TestBaseHysteresis:
             )[1],
         )
 
-        bad_inputs = [torch.rand(2, 3, 4), torch.rand(10), torch.rand(10, 1)]
-        for ele in bad_inputs:
-            with pytest.raises(ValueError):
-                res = H(ele)
-
     def test_applying_fields(self):
         h_data = torch.linspace(1.0, 10.0, 10)
         H = BaseHysteresis(h_data)

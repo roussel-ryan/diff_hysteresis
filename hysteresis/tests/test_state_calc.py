@@ -78,8 +78,17 @@ class TestStateCalc:
         current_field = torch.tensor(-0.01)
         h = torch.linspace(0.0, 1.0, 20, requires_grad=True)
         out = predict_batched_state(
-            h.reshape(20, 1, 1), mesh, current_state, current_field
+            h.reshape(20, 1), mesh, current_state, current_field
         )
         assert out.shape == torch.Size([20, 1, len(mesh)])
         out[0][0][0].backward()
         assert not torch.any(torch.isnan(h.grad))
+
+        # test different sized tensors for h - requires last dim to be 1
+        tests = [torch.rand(10, 20), torch.rand(10), torch.rand(2, 4, 5)]
+        for t in tests:
+            out = predict_batched_state(
+                t, mesh, current_state, current_field
+            )
+            assert out.shape == torch.Size([*t.shape, len(mesh)])
+

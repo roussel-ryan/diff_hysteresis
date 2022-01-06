@@ -59,6 +59,8 @@ def predict_batched_state(
     -------
 
     """
+
+    h = h.unsqueeze(-1)
     n_mesh_points = mesh_points.shape[0]
     tkwargs = tkwargs or {}
 
