@@ -48,7 +48,7 @@ class TestExactHybridGP:
 
         # try with and without trainable H model
         for ele in [True, False]:
-            H = BaseHysteresis(train_x.flatten(), polynomial_degree=3, trainable=ele)
+            H = BaseHysteresis(train_x.flatten(), polynomial_degree=1, trainable=ele)
 
             model = ExactHybridGP(train_x, train_y.flatten(), H)
             mll = ExactMarginalLogLikelihood(model.gp.likelihood, model)
@@ -57,10 +57,10 @@ class TestExactHybridGP:
             value = mll(model(model.train_inputs[0]), model.train_targets)
             assert value.shape == torch.Size([])
 
-            fit_gpytorch_model(mll, options={"maxiter": 5})
+            fit_gpytorch_model(mll, options={"maxiter": 2})
 
         # train with random data inside bounds
-        H = BaseHysteresis(train_x.flatten(), polynomial_degree=3)
+        H = BaseHysteresis(train_x.flatten(), polynomial_degree=1)
 
         model = ExactHybridGP(
             torch.rand(10).unsqueeze(1).double() + torch.min(train_x),
@@ -69,7 +69,7 @@ class TestExactHybridGP:
         )
 
         mll = ExactMarginalLogLikelihood(model.gp.likelihood, model)
-        fit_gpytorch_model(mll, options={"maxiter": 5})
+        fit_gpytorch_model(mll, options={"maxiter": 2})
 
         # train multi dim with random data
         model = ExactHybridGP(
@@ -81,7 +81,6 @@ class TestExactHybridGP:
         mll = ExactMarginalLogLikelihood(model.gp.likelihood, model)
         fit_gpytorch_model(mll, options={"maxiter": 5})
 
-
     def test_predict(self):
         train_x, train_m, train_y = load()
         H = BaseHysteresis(train_x.flatten(), polynomial_degree=3)
@@ -90,20 +89,20 @@ class TestExactHybridGP:
         # evaluate on training data
         assert isinstance(model(train_x), gpytorch.distributions.MultivariateNormal)
 
-        # evaluate on next data
-        test_h = torch.rand(10).reshape(-1, 1, 1, 1).double() + min(train_x)
-        model.next()
-        post = model(test_h)
+        for ele in [True, False]:
+            # evaluate on next data
+            test_h = torch.rand(10).unsqueeze(-1).double() + min(train_x)
+            model.next()
+            post = model(test_h, return_real=ele)
 
-        # evaluate on future data
-        test_h = torch.rand(10).double() + min(train_x)
-        model.future()
-        post = model(test_h.unsqueeze(1))
+            # evaluate on future data
+            test_h = torch.rand(10).double() + min(train_x)
+            model.future()
+            post = model(test_h.unsqueeze(1), return_real=ele)
 
     def test_botorch(self):
         train_x, train_m, train_y = load()
-        H = BaseHysteresis(train_x.flatten(), polynomial_degree=3)
-        likelihood = GaussianLikelihood()
+        H = BaseHysteresis(train_x.flatten(), polynomial_degree=1)
         model = ExactHybridGP(train_x, train_y.flatten(), H)
 
         test_h = torch.rand(10).reshape(-1, 1, 1).double() + min(train_x)
@@ -112,11 +111,10 @@ class TestExactHybridGP:
             acq(test_h)
 
         model.next()
-        acq(test_h)
 
         # try to optimize
         bounds = torch.tensor([min(train_x), max(train_x)]).reshape(2, 1)
-        candidate, _ = optimize_acqf(acq, bounds, 1, 1, 1)
+        candidate, _ = optimize_acqf(acq, bounds, 1, 1, 2)
 
     def test_multiple_magents(self):
         train_x, train_m, train_y = load()

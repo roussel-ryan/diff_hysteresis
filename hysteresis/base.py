@@ -77,7 +77,7 @@ class BaseHysteresis(Module, ModeModule):
         self._fixed_domain = fixed_domain
 
         # initialize with empty transformer
-        self.transformer = HysteresisTransform()
+        self.transformer = HysteresisTransform(fixed_domain=fixed_domain)
 
         # if data is specified then set the history data and train transformer
         if isinstance(train_h, Tensor):

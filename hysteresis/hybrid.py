@@ -2,6 +2,7 @@ from typing import Any, Union
 
 import torch
 from botorch.models import SingleTaskGP
+from botorch.models.transforms import Normalize, Standardize
 from botorch.posteriors import GPyTorchPosterior
 from gpytorch.models import GP
 from torch import Tensor
@@ -41,9 +42,17 @@ class ExactHybridGP(ModeModule, GP):
         # set hysteresis model history data
         self._set_hysteresis_model_train_data(train_x)
 
-        # set train inputs and outputs
+        # set train inputs
         self.train_inputs = (train_x,)
-        self.train_targets = train_y
+
+        # set normalization for magnetization (trained during training mode)
+        self.m_transform = Normalize(self.input_dim)
+
+        #train outcome transform
+        self.outcome_transform = Standardize(1)
+        self.outcome_transform.train()
+        self.train_targets = self.outcome_transform(train_y.unsqueeze(1))[0].flatten()
+        self.outcome_transform.eval()
 
         # get magnetization from hysteresis models
         train_m = self.get_magnetization(train_x, mode=FITTING).detach()
@@ -53,6 +62,9 @@ class ExactHybridGP(ModeModule, GP):
             train_y.unsqueeze(1),
             **kwargs
         )
+
+    def __call__(self, *inputs, **kwargs):
+        return self.forward(*inputs, **kwargs)
 
     def _set_hysteresis_model_train_data(self, train_h):
         for idx, hyst_model in enumerate(self.hysteresis_models):
@@ -70,19 +82,32 @@ class ExactHybridGP(ModeModule, GP):
             train_m += [hyst_model(X[..., idx], return_real=True)]
         return torch.cat([ele.unsqueeze(-1) for ele in train_m], dim=-1)
 
+    def get_normalized_magnetization(self, X, mode=None):
+        m = self.get_magnetization(X, mode)
+
+        # check to see if a normalization model has been trained
+        if not self.m_transform.equals(Normalize(self.input_dim)) or self.training:
+            return self.m_transform(m)
+        else:
+            return m
+
     def posterior(
         self, X: Tensor, observation_noise: Union[bool, Tensor] = False, **kwargs: Any
     ) -> GPyTorchPosterior:
         if self.mode != NEXT:
             raise HysteresisError("calling posterior requires NEXT mode")
-        M = self.get_magnetization(X)
+        M = self.get_normalized_magnetization(X)
 
         return self.gp.posterior(M, observation_noise=observation_noise, **kwargs)
 
-    def forward(self, X, from_magnetization=False):
-        train_m = self.get_magnetization(X)
+    def forward(self, X, from_magnetization=False, return_real=False):
+        train_m = self.get_normalized_magnetization(X)
 
         if self.training:
             self.gp.set_train_data(train_m, self.train_targets)
 
-        return self.gp(train_m)
+        if return_real:
+            return self.outcome_transform.untransform_posterior(self.gp(
+                train_m.unsqueeze(-1)))
+        else:
+            return self.gp(train_m)
