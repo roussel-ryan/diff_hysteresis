@@ -143,7 +143,7 @@ class BaseHysteresis(Module, ModeModule):
                 (self._history_h, self.transformer.transform(h)[0])
             ).detach()
         else:
-            _history_h = h
+            _history_h = self.transformer.transform(h)[0].to(**self.tkwargs)
         self._update_h_history_buffer(_history_h)
 
     def _predict_normalized_magnetization(self, states, h):

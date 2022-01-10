@@ -160,47 +160,57 @@ class TestBaseHysteresis:
 
     def test_applying_fields(self):
         h_data = torch.linspace(1.0, 10.0, 10)
-        H = BaseHysteresis(h_data)
+        # test with and without prior data
+        for initial_history in [None, h_data]:
+            if initial_history is None:
+                H = BaseHysteresis(fixed_domain=torch.tensor((1.0,
+                                                                    10.0)).double())
+            else:
+                H = BaseHysteresis(initial_history)
 
-        # apply a field to the magnet
-        h_new = torch.rand(3) * 5.0 + min(h_data)
-        for i in range(len(h_new)):
-            h_new_total = torch.cat((h_data, h_new[: i + 1])).double()
-            H.apply_field(h_new[i])
-            assert torch.allclose(H.history_h, h_new_total)
-            assert torch.isclose(H.history_h[-1], h_new[i].double())
+            # apply a field to the magnet
+            h_new = torch.rand(3) * 5.0 + min(h_data)
+            for i in range(len(h_new)):
+                if initial_history is None:
+                    h_new_total = h_new[: i + 1].double()
+                else:
+                    h_new_total = torch.cat((h_data, h_new[: i + 1])).double()
+                H.apply_field(h_new[i])
+                assert torch.allclose(H.history_h, h_new_total)
+                assert torch.isclose(H.history_h[-1], h_new[i].double())
 
-            # compare hysterion state shape to ground truth
-            states = get_states(
-                H.transformer.transform(h_new_total)[0],
-                H.mesh_points,
-                temp=H.temp,
-                tkwargs=H.tkwargs,
-            )
-            assert torch.allclose(states, H._states, atol=1e-3)
+                # compare hysterion state shape to ground truth
+                states = get_states(
+                    H.transformer.transform(h_new_total)[0],
+                    H.mesh_points,
+                    temp=H.temp,
+                    tkwargs=H.tkwargs,
+                )
+                assert torch.allclose(states, H._states, atol=1e-3)
 
-            # test fitting
-            H.fitting()
-            with pytest.raises(HysteresisError):
-                H(h_data)
+                # test fitting
+                if initial_history is not None:
+                    H.fitting()
+                    with pytest.raises(HysteresisError):
+                        H(h_data)
 
-            # test data
-            h_test = torch.rand(10) + min(h_data)
+                # test data
+                h_test = torch.rand(10) + min(h_data)
 
-            # test regression
-            H.regression()
-            res = H(h_test)
-            assert res.shape == h_test.shape
+                # test regression
+                H.regression()
+                res = H(h_test)
+                assert res.shape == h_test.shape
 
-            # test future
-            H.future()
-            res = H(h_test)
-            assert res.shape == h_test.shape
+                # test future
+                H.future()
+                res = H(h_test)
+                assert res.shape == h_test.shape
 
-            # test next
-            H.next()
-            res = H(h_test.reshape(-1, 1, 1))
-            assert res.shape == h_test.reshape(-1, 1, 1).shape
+                # test next
+                H.next()
+                res = H(h_test.reshape(-1, 1, 1))
+                assert res.shape == h_test.reshape(-1, 1, 1).shape
 
     def test_autograd(self):
         h_data = torch.linspace(-1, 10.0)
