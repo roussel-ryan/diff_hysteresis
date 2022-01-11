@@ -45,7 +45,6 @@ class ExactHybridGP(ModeModule, GP):
         # set train inputs
         self.train_inputs = (train_x,)
 
-        # set normalization for magnetization (trained during training mode)
         self.m_transform = Normalize(self.input_dim)
 
         #train outcome transform

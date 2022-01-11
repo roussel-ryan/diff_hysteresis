@@ -21,13 +21,13 @@ class HysteresisMagnet(ModeModule, ABC):
     def get_transport_matrix(self, X: Tensor):
         if isinstance(X, Tensor):
             self.hysteresis_model.mode = self.mode
-            m = self.hysteresis_model(X)
+            m = self.hysteresis_model(X, return_real=True)
             return self._calculate_beam_matrix(m)
 
         else:
             assert self.hysteresis_model.mode == CURRENT
-            self.hysteresis_model.mode = self.mode
-            m = self.hysteresis_model()
+            assert self.mode == CURRENT
+            m = self.hysteresis_model(return_real=True)
             return self._calculate_beam_matrix(m).squeeze()
 
     def forward(self, X: Tensor = None):
@@ -94,7 +94,6 @@ class HysteresisAccelerator(TorchAccelerator, ModeModule):
         assert history_h.shape[-1] == len(h_elements)
         for idx, ele in enumerate(h_elements):
             ele.hysteresis_model.set_history(history_h[:, idx])
-
 
 
 class HysteresisQuad(HysteresisMagnet):

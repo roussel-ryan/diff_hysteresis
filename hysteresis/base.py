@@ -56,7 +56,6 @@ class BaseHysteresis(Module, ModeModule):
             gpytorch.constraints.Interval(-2000.0, 2000.0),
         ]
 
-        self.trainable = trainable
         for param_name, param_val, param_constraint in zip(
                 param_names, param_vals, param_constraints
         ):
@@ -78,6 +77,8 @@ class BaseHysteresis(Module, ModeModule):
 
         # initialize with empty transformer
         self.transformer = HysteresisTransform(fixed_domain=fixed_domain)
+
+        self.trainable = trainable
 
         # if data is specified then set the history data and train transformer
         if isinstance(train_h, Tensor):
@@ -256,6 +257,26 @@ class BaseHysteresis(Module, ModeModule):
                 f"Argument values are not inside valid domain ("
                 f"{list(self.valid_domain)}) for this model! Offending tensor is {values}"
             )
+
+    def reset_history(self):
+        del self._history_h
+        del self._history_m
+
+    @property
+    def trainable(self):
+        return self._trainable
+
+    @trainable.setter
+    def trainable(self, value):
+        self._trainable = value
+        for param in self.parameters(recurse=True):
+            param.requires_grad = value
+        if not value:
+            self.transformer.freeze()
+
+    @property
+    def fixed_domain(self):
+        return self._fixed_domain is not None
 
     @property
     def valid_domain(self):

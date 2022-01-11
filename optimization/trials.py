@@ -15,22 +15,26 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 
-def run_trial(initial_X, scale, verbose=False, use_hybrid=False, path='', fname=''):
+def run_trial(initial_X, scale, verbose=False, use_hybrid=False, \
+              path='', fname='', use_slac=False):
     def objective(R):
         return torch.abs(torch.sqrt(R[0, 0]) - 8e-3) + torch.abs(
             torch.sqrt(R[2, 2]) - 8e-3)
 
     objective_func = objective
     # hysteresis model
-    H = BaseHysteresis(
-        trainable=False,
-        fixed_domain=torch.tensor((-1.0, 1.0))
-    )
+    if use_slac:
+        H = torch.load('q4034.pt')
+    else:
+        H = BaseHysteresis(
+            trainable=False,
+            fixed_domain=torch.tensor((-1.0, 1.0))
+        )
 
-    m_sat = 400.0
-    H.scale = scale
-    H.slope = (m_sat - H.scale) * 2.0
-    H.offset = -H.slope / 2.0
+        m_sat = 400.0
+        H.scale = scale
+        H.slope = (m_sat - H.scale) * 2.0
+        H.offset = -H.slope / 2.0
 
     # accelerator model
     hmodels = [deepcopy(H), deepcopy(H), deepcopy(H)]
@@ -73,14 +77,15 @@ def run_trial(initial_X, scale, verbose=False, use_hybrid=False, path='', fname=
     )
 
     HA.elements['q1'].hysteresis_model.regression()
-    M = HA.elements['q1'].hysteresis_model(test_applied_fields, return_real=True).detach()
+    M = HA.elements['q1'].hysteresis_model(test_applied_fields,
+                                           return_real=True).detach()
 
     fig, ax = plt.subplots()
     ax.plot(test_applied_fields, M)
     plt.show()
 
     results = torch.cat((points, objective_vals), dim=1)
-    #torch.save(results, f'{path}{fname}.pt')
+    # torch.save(results, f'{path}{fname}.pt')
 
 
 if __name__ == '__main__':

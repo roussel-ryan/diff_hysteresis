@@ -9,21 +9,21 @@ from botorch.models import SingleTaskGP
 from botorch.models.transforms import Normalize, Standardize
 from tqdm.notebook import trange
 
-
 from botorch.acquisition import UpperConfidenceBound
 from botorch.optim import optimize_acqf
 
-def get_model(train_X, train_Y, use_hybrid = False, h_models = None):
+
+def get_model(train_X, train_Y, use_hybrid=False, h_models=None):
     if use_hybrid:
         gpmodel = ExactHybridGP(
             train_X.clone().detach().double(),
-            train_Y.clone().detach().flatten().double(), 
+            train_Y.clone().detach().flatten().double(),
             h_models,
         )
-        
+
         mll = ExactMarginalLogLikelihood(gpmodel.gp.likelihood, gpmodel)
         fit_gpytorch_model(mll)
-        
+
     else:
         gpmodel = SingleTaskGP(
             train_X.clone().detach(),
@@ -35,6 +35,7 @@ def get_model(train_X, train_Y, use_hybrid = False, h_models = None):
         fit_gpytorch_model(mll)
     return gpmodel
 
+
 def optimize(
         accelerator_model,
         initial_beam_matrix,
@@ -42,7 +43,7 @@ def optimize(
         objective,
         initial_X=None,
         steps=50,
-        use_hybrid = True,
+        use_hybrid=True,
         verbose=False
 ):
     iterations = steps
@@ -51,16 +52,16 @@ def optimize(
         # initialize with a couple of points
         train_X = torch.ones((3, 3)) * 0.25
         train_X[0] = train_X[0] * 0.0
-        train_X[2] = torch.tensor((0.15,-0.36, 0.36))
+        train_X[2] = torch.tensor((0.15, -0.36, 0.36))
     else:
         train_X = initial_X
-        
-    train_Y = torch.empty((len(train_X),1))
+
+    train_Y = torch.empty((len(train_X), 1))
 
     for j in range(len(train_X)):
         accelerator_model.apply_fields({'q1': train_X[j, 0],
                                         'q2': train_X[j, 1],
-                                        'q3': train_X[j, 2],})
+                                        'q3': train_X[j, 2], })
 
         train_Y[j] = objective(
             accelerator_model.forward(initial_beam_matrix)
@@ -77,7 +78,7 @@ def optimize(
 
         if use_hybrid:
             gpmodel.next()
-        
+
         bounds = torch.stack([-1.0 * torch.ones(3), torch.ones(3)])
         candidate, acq_value = optimize_acqf(
             UCB,
@@ -89,9 +90,9 @@ def optimize(
         train_X = torch.cat((train_X, candidate))
 
         # apply candidate
-        accelerator_model.apply_fields({'q1': candidate[0,0],
-                                        'q2': candidate[0,1],
-                                        'q3': candidate[0,2]})
+        accelerator_model.apply_fields({'q1': candidate[0, 0],
+                                        'q2': candidate[0, 1],
+                                        'q3': candidate[0, 2]})
 
         # make next measurement
         bs = objective(
@@ -101,7 +102,6 @@ def optimize(
 
         if verbose:
             print(torch.cat((candidate, bs), dim=1))
-
 
         # train new model
         try:
