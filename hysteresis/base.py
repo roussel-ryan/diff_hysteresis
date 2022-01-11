@@ -248,11 +248,13 @@ class BaseHysteresis(Module, ModeModule):
         return result
 
     def _check_inside_valid_domain(self, values):
-        if torch.any(values < self.valid_domain[0]) or torch.any(
-                values > self.valid_domain[1]
+        machine_error = 1e-4
+        if torch.any(values < self.valid_domain[0] - machine_error) or torch.any(
+                values > self.valid_domain[1] + machine_error
         ):
             raise HysteresisError(
-                f"Argument values are not inside valid domain ({list(self.valid_domain)}) for this model!"
+                f"Argument values are not inside valid domain ("
+                f"{list(self.valid_domain)}) for this model! Offending tensor is {values}"
             )
 
     @property
