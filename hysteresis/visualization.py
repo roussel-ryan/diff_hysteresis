@@ -4,8 +4,12 @@ import torch
 from hysteresis.base import BaseHysteresis
 
 
-def plot_hysterion_density(H: BaseHysteresis, density=None):
-    fig, ax = plt.subplots()
+def plot_hysterion_density(H: BaseHysteresis, density=None, ax=None):
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = None
+
     x = H.mesh_points[:, 0]
     y = H.mesh_points[:, 1]
 
@@ -14,8 +18,7 @@ def plot_hysterion_density(H: BaseHysteresis, density=None):
 
     den = density  # * H.get_mesh_size(x, y)
     c = ax.tripcolor(x, y, den)
-    fig.colorbar(c)
-    return fig, ax
+    return fig, ax, c
 
 
 def plot_bayes_predicition(summary, m, baseline=False):

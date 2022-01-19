@@ -99,13 +99,18 @@ class ExactHybridGP(ModeModule, GP):
 
         return self.gp.posterior(M, observation_noise=observation_noise, **kwargs)
 
-    def forward(self, X, from_magnetization=False, return_real=False):
+    def forward(self, X, from_magnetization=False, return_real=False,
+                return_likelihood=False):
         train_m = self.get_normalized_magnetization(X)
 
         if self.training:
             self.gp.set_train_data(train_m, self.train_targets)
 
-        if return_real:
+        if return_likelihood and return_real:
+            lk = self.gp.likelihood(self.gp(train_m.unsqueeze(-1)))
+            return self.outcome_transform.untransform_posterior(lk)
+
+        elif return_real:
             return self.outcome_transform.untransform_posterior(self.gp(
                 train_m.unsqueeze(-1)))
         else:

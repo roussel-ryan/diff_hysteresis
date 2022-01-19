@@ -38,6 +38,11 @@ class BaseHysteresis(Module, ModeModule):
         self.tkwargs = tkwargs or {}
         self.tkwargs.update({"dtype": torch.double, "device": "cpu"})
 
+        # initialize with empty transformer
+        self.transformer = HysteresisTransform(fixed_domain=fixed_domain)
+
+        self.trainable = trainable
+
         # generate mesh grid on 2D normalized domain [[0,1],[0,1]]
         self.temp = temp
         self.mesh_scale = mesh_scale
@@ -75,10 +80,6 @@ class BaseHysteresis(Module, ModeModule):
         self.polynomial_fit_iterations = polynomial_fit_iterations
         self._fixed_domain = fixed_domain
 
-        # initialize with empty transformer
-        self.transformer = HysteresisTransform(fixed_domain=fixed_domain)
-
-        self.trainable = trainable
 
         # if data is specified then set the history data and train transformer
         if isinstance(train_h, Tensor):
