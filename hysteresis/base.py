@@ -80,7 +80,6 @@ class BaseHysteresis(Module, ModeModule):
         self.polynomial_fit_iterations = polynomial_fit_iterations
         self._fixed_domain = fixed_domain
 
-
         # if data is specified then set the history data and train transformer
         if isinstance(train_h, Tensor):
             self.set_history(train_h, train_m)
@@ -258,6 +257,9 @@ class BaseHysteresis(Module, ModeModule):
                 f"Argument values are not inside valid domain ("
                 f"{list(self.valid_domain)}) for this model! Offending tensor is {values}"
             )
+
+    def reconstruct_hysterion_density(self):
+        return self.hysterion_density
 
     def reset_history(self):
         del self._history_h
