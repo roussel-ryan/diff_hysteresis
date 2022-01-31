@@ -7,8 +7,8 @@ from hysteresis.training import train_MSE
 class HysteresisTransform(Module):
     _min_m = None
     _max_m = None
-    _offset_m = torch.zeros(1)
-    _scale_m = torch.ones(1)
+    offset_m = torch.zeros(1)
+    scale_m = torch.ones(1)
     _fixed_domain = False
     _domain = torch.tensor((0.0, 1.0))
     _mrange = torch.tensor((0.0, 1.0))
@@ -86,6 +86,14 @@ class HysteresisTransform(Module):
     def get_fit(self, h):
         return self._unnorm_m(self._poly_fit(self._norm_h(h)))
 
+    def get_fit_grad(self, h):
+        h_copy = h.clone()
+        h_copy.requires_grad = True
+
+        out = self._unnorm_m(self._poly_fit(self._norm_h(h_copy)))
+        out.backward(torch.ones_like(h_copy))
+        return h_copy.grad
+
     def update_fit(self, hn, mn):
         """do polynomial fitting on normalized train_h and train_m"""
         self._poly_fit = Polynomial(self.polynomial_degree)
@@ -120,15 +128,15 @@ class HysteresisTransform(Module):
 
         fit = self._unnorm_m(self._poly_fit(self._norm_h(train_h)))
         m_subtracted = train_m - fit
-        self._offset_m = torch.mean(m_subtracted)
-        self._scale_m = torch.std(m_subtracted - self._offset_m)
+        self.offset_m = torch.mean(m_subtracted)
+        self.scale_m = torch.std(m_subtracted - self.offset_m)
 
     def _transform_h(self, h):
         return self._norm_h(h)
 
     def _transform_m(self, h, m):
         fit = self._unnorm_m(self._poly_fit(self._norm_h(h)))
-        return (m - fit - self._offset_m) / self._scale_m
+        return (m - fit - self.offset_m) / self.scale_m
 
     def transform(self, h, m=None):
         hn = self._transform_h(h)
@@ -144,7 +152,7 @@ class HysteresisTransform(Module):
 
     def _untransform_m(self, hn, mn):
         fit = self._unnorm_m(self._poly_fit(hn))
-        return self._scale_m * mn + fit.reshape(hn.shape) + self._offset_m
+        return self.scale_m * mn + fit.reshape(hn.shape) + self.offset_m
 
     def untransform(self, hn, mn=None):
         # verify the inputs are in the normalized region within some machine epsilon

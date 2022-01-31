@@ -5,7 +5,8 @@ from hysteresis.base import BaseHysteresis
 
 
 def plot_hysterion_density(H: BaseHysteresis, density=None, ax=None):
-    if ax is None:
+    new_ax = ax is None
+    if new_ax:
         fig, ax = plt.subplots()
     else:
         fig = None
@@ -18,7 +19,11 @@ def plot_hysterion_density(H: BaseHysteresis, density=None, ax=None):
 
     den = density  # * H.get_mesh_size(x, y)
     c = ax.tripcolor(x, y, den)
-    return fig, ax, c
+    if new_ax:
+        fig.colorbar(c)
+        return fig, ax, c
+    else:
+        return fig, ax, c
 
 
 def plot_bayes_predicition(summary, m, baseline=False):

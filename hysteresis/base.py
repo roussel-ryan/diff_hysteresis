@@ -30,6 +30,7 @@ class BaseHysteresis(Module, ModeModule):
             polynomial_degree: int = 1,
             polynomial_fit_iterations: int = 3000,
             temp: float = 1e-2,
+            use_normalized_density: bool = True,
             fixed_domain: Tensor = None,
 
     ):
@@ -54,10 +55,16 @@ class BaseHysteresis(Module, ModeModule):
         density = torch.zeros(len(self.mesh_points))
         param_vals = [density, torch.zeros(1), torch.zeros(1), torch.zeros(1)]
         param_names = ["raw_hysterion_density", "raw_offset", "raw_scale", "raw_slope"]
+
+        if use_normalized_density:
+            density_constraint = gpytorch.constraints.Interval(0.0, 1.0)
+        else:
+            density_constraint = gpytorch.constraints.Positive()
+
         param_constraints = [
-            gpytorch.constraints.Interval(0.0, 1.0),
+            density_constraint,
             gpytorch.constraints.Interval(-2000.0, 2000.0),
-            gpytorch.constraints.Interval(-2000.0, 2000.0),
+            gpytorch.constraints.Interval(0.0, 2000.0),
             gpytorch.constraints.Interval(-2000.0, 2000.0),
         ]
 
@@ -72,7 +79,7 @@ class BaseHysteresis(Module, ModeModule):
 
         # set initial values for linear parameters
         self.offset = torch.zeros(1)
-        self.scale = torch.zeros(1)
+        self.scale = torch.ones(1)
         self.slope = torch.ones(1)
 
         # create initial transformer object
@@ -151,7 +158,7 @@ class BaseHysteresis(Module, ModeModule):
         m = torch.sum(self.hysterion_density * states, dim=-1) / torch.sum(
             self.hysterion_density
         )
-        return self.scale * m.reshape(h.shape) + h * self.slope + self.offset
+        return self.scale * m.reshape(h.shape) + self.offset + h * self.slope
 
     def get_negative_saturation(self):
         return self.transformer.untransform(torch.zeros(1), -self.scale + self.offset)[
