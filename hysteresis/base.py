@@ -4,7 +4,7 @@ from torch.nn import Parameter
 from gpytorch import Module
 from torch import Tensor
 from typing import Dict, Callable
-from .meshing import create_triangle_mesh, default_mesh_size
+from .meshing import create_triangle_mesh
 from .states import get_states, predict_batched_state
 from .transform import HysteresisTransform
 from .modes import ModeModule, REGRESSION, NEXT, FUTURE, FITTING, CURRENT
