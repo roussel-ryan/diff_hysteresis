@@ -16,7 +16,7 @@ def sweep_left(h, mesh, initial_state, T=1e-2):
 def switch(h, mesh, T=1e-4):
     # note that + T is needed to satisfy boundary conditions (creating a bit of delay
     # before the flip starts happening
-    return 1.0 + torch.tanh((h - mesh + 2*T) / abs(T))
+    return 1.0 + torch.tanh((h - mesh - 0*T) / abs(T))
 
 
 def get_current(current_state, current_field, n_mesh_points, **tkwargs):

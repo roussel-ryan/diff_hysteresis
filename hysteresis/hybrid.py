@@ -97,7 +97,8 @@ class ExactHybridGP(ModeModule, GP):
             raise HysteresisError("calling posterior requires NEXT mode")
         M = self.get_normalized_magnetization(X)
 
-        return self.gp.posterior(M, observation_noise=observation_noise, **kwargs)
+        return self.gp.posterior(M.double(), observation_noise=observation_noise,
+                                 **kwargs)
 
     def forward(self, X, from_magnetization=False, return_real=False,
                 return_likelihood=False):
