@@ -1,4 +1,4 @@
-from typing import Any, Union
+from typing import Any, Union, List
 
 import torch
 from botorch.models import SingleTaskGP
@@ -7,14 +7,54 @@ from botorch.posteriors import GPyTorchPosterior
 from gpytorch.models import GP
 from torch import Tensor
 
-from hysteresis.base import HysteresisError
+from hysteresis.base import HysteresisError, BaseHysteresis
 from hysteresis.modes import ModeModule, FITTING, NEXT
 
 
 class ExactHybridGP(ModeModule, GP):
     num_outputs = 1
 
-    def __init__(self, train_x: Tensor, train_y: Tensor, hysteresis_models, **kwargs):
+    def __init__(
+        self,
+        train_x: Tensor,
+        train_y: Tensor,
+        hysteresis_models: List[BaseHysteresis] or BaseHysteresis,
+        **kwargs
+    ):
+        """
+        Joint hysteresis - Gaussian process module used to fit beam response data
+        when hysteresis effects are present.
+
+        The model works as follows:
+        hysteresis_input -> hysteresis_output -> normalization -> GP_model_input ->
+        GP_model_output
+
+        This model uses the same mode convention as hysteresis.base.BaseHysteresis
+        that controls the output of the forward() method for training, prediction etc.
+        Model must be in NEXT mode for use in Botorch acquisition functions.
+
+        From this model we are able to infer hysteresis parameters up to a scale +
+        offset factor.
+
+        Parameters
+        ----------
+        train_x : Tensor
+            Sequence of input training data (input current or magnetization). Shape
+            must be N x M where M is equal to the number of hysteresis models passed
+            to this constructor.
+
+        train_y :
+            Sequence of output training data (beam measurements etc.). Tensor shape
+            must be (N,)
+
+        hysteresis_models: List[BaseHysteresis]
+            List of M independent hysteresis models to model each element exibiting
+            hysteresis.
+
+        kwargs
+            Arguments passed to botorch SingleTaskGP object.
+        """
+
         super(ExactHybridGP, self).__init__()
 
         if train_x.shape[0] != train_y.shape[0]:

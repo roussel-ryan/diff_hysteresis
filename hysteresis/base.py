@@ -33,6 +33,78 @@ class BaseHysteresis(Module, ModeModule):
         use_normalized_density: bool = True,
         fixed_domain: Tensor = None,
     ):
+        """
+        Implementation of a differentiable Preisach hysteresis model using pyTorch.
+
+        This model is a PyTorch Module that can be used to do regression of
+        experimental hysteresis curve data or make predictions with pre-specified
+        properties. See paper for calculation details.
+
+        The model has several different modes, which changes the output of the
+        forward() method.
+
+        - FITTING (default) - requires the input argument to the forward method to be
+            the same as train_h. Used to fit model parameters.
+        - REGRESSION - Used to make output predictions given a sequence of input
+            values, starting at negative saturation. Used to make predictions given
+            fitted models.
+        - NEXT - Used to make batch predictions of a set of potential next input
+            values starting at the current internal state. Used for optimization.
+        - FUTURE - Used to make output predictions given a sequence of input
+            values, starting at the current internal state. Used to make predictions
+            given fitted models.
+        - CURRENT - Used to predict the model output at its current internal state.
+
+        The module keeps a record of applied fields to it so be careful when using
+        multiple copies or references to a given object. It is recommended to always
+        use copy.deepcopy() to make copies.
+
+        Parameters
+        ----------
+        train_h: Tensor, optional
+            Sequence of applied fields to the magnet. Must be specified if `train_m`
+            is specified.
+
+        train_m : Tensor, optional
+            Sequence of outputs from the model used for training and normalization.
+
+        trainable : bool, True
+            Specify if model parameters including hysteron density, linear offset,
+            slope and scale are trainable (requires_grad=True).
+
+        tkwargs : Dict, optional
+            Tensor type and device for model. Default: {'device':'cpu',
+            'dtype':torch.Double}.
+
+        mesh_scale : float, 1.0
+            Mesh density scaling. Default scale of 1.0 produces a mesh with 111 points.
+
+        mesh_density_function : Callable, optional
+            Density function for meshing on the Preisach plane. Default produces a
+            fine mesh along \alpha=\beta line and corse mesh away from that line.
+
+        polynomial_degree : int, 1
+            Polynomial degree for fitting training data, used for transformer object
+            to resolve small hysteresis errors.
+
+        polynomial_fit_iterations : int, 3000
+            Number of iterations used to fit transformer object to normalize small
+            hysteresis errors.
+
+        temp : float, 1e-2
+            Temperature term used to create differentiable hysteresis operator. Small
+            temp values are a closer approximation but results in larger derivatives.
+
+        use_normalized_density : bool, True
+            Flag to require hysteron densities normalized to the unit domain.
+
+        fixed_domain : Tensor, optional
+            Fixed input domain, otherwise training data is used to normalize the
+            input data. Useful for optimization or when training data is not
+            specified.
+
+        """
+
         super(BaseHysteresis, self).__init__()
 
         self.tkwargs = tkwargs or {}
@@ -55,6 +127,7 @@ class BaseHysteresis(Module, ModeModule):
         param_vals = [density, torch.zeros(1), torch.zeros(1), torch.zeros(1)]
         param_names = ["raw_hysterion_density", "raw_offset", "raw_scale", "raw_slope"]
 
+        # add constraint to hysteron density in unit domain, or at least > 0
         if use_normalized_density:
             density_constraint = gpytorch.constraints.Interval(0.0, 1.0)
         else:
@@ -156,6 +229,7 @@ class BaseHysteresis(Module, ModeModule):
         return self.scale * m.reshape(h.shape) + self.offset + h * self.slope
 
     def get_negative_saturation(self):
+        """ get negative saturation value of model """
         return self.transformer.untransform(torch.zeros(1), -self.scale + self.offset)[
             1
         ].to(**self.tkwargs)
@@ -260,9 +334,6 @@ class BaseHysteresis(Module, ModeModule):
                 f"Argument values are not inside valid domain ("
                 f"{list(self.valid_domain)}) for this model! Offending tensor is {values}"
             )
-
-    def reconstruct_hysterion_density(self):
-        return self.hysterion_density
 
     def reset_history(self):
         del self._history_h
