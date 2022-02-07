@@ -1,0 +1,15 @@
+Project: LCLS-II
+Magnet Type: Quad
+Magnet Name: 4194
+Serial Number: 1
+
+    Date      Time    Run    Device    Oper  Comment
+----------  --------  ---  ----------  ----  -------->
+12-17-2018  15:43:39    1     48BC1.6   sda  Integrated gradient vs current from 0-165-0 A.  Harmonics at 20, 40, 80 & 165 A
+04-05-2019  11:14:31    2     48BC1.6   sda  Remeasure check.  Integrated gradient vs current from 0-165-0 A.  Harmonics at 20, 40, 80 & 165 A
+11-11-2021  10:47:00    3      1DQB26   sda  Major Hysteresis Loop.  0 to 165 to 0 Amps in 10% steps, then 0 to 165 to 0 0 to 165 Amps to 0 in 5% steps
+11-11-2021  14:53:27    4      1DQB26   sda  Minor hysteresis loop 1. 0 to 50% of Max then up to 60%  down to 40% and back to 50% in 1% of Max steps
+11-11-2021  17:39:42    5      1DQB26   sda  Minor hysteresis loop 2.  0  to Max then down to 90%  then up to Max in 1% of Max steps
+11-12-2021  10:37:09    6      1DQB26   sda  Minor hysteresis loop 3. 0 to 50% of Max then down to 40%  up to 60% and back to 50% in 1% of Max steps
+11-12-2021  12:48:37    7      1DQB26   sda  Hysteresis Trial 1. Sequence is o   0, 0.9, 0.1, 0.8, 0.2, 0.7, 0.3, 0.6, 0.4, 0.5 * Max
+11-12-2021  13:57:56    8      1DQB26   sda  Hysteresis Trial 2. 0,0  0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8, 0.1, 0.9 * Max current
