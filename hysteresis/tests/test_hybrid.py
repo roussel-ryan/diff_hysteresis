@@ -53,7 +53,7 @@ class TestExactHybridGP:
             model = ExactHybridGP(train_x, train_y.flatten(), H)
             mll = ExactMarginalLogLikelihood(model.gp.likelihood, model)
 
-            # requirement for training
+            # requirement for training.py
             value = mll(model(model.train_inputs[0]), model.train_targets)
             assert value.shape == torch.Size([])
 
@@ -86,7 +86,7 @@ class TestExactHybridGP:
         H = BaseHysteresis(train_x.flatten(), polynomial_degree=3)
         model = ExactHybridGP(train_x, train_y.flatten(), H)
 
-        # evaluate on training data
+        # evaluate on training.py data
         assert isinstance(model(train_x), gpytorch.distributions.MultivariateNormal)
 
         for ele in [True, False]:

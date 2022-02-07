@@ -88,7 +88,7 @@ class TestBaseHysteresis:
         # set hysterion density to near zero
         H.hysterion_density = torch.ones(H.n_mesh_points) * 1e-5
 
-        # predict real values with training
+        # predict real values with training.py
         m_pred = H(h_data, return_real=True)
         assert H.mode == FITTING
         assert m_pred.shape == torch.Size([20])
@@ -103,7 +103,7 @@ class TestBaseHysteresis:
 
         m_pred = H(h_data, return_real=True)
         assert m_pred.shape == h_data.shape
-        
+
     def test_forward_current(self):
         h_data = torch.linspace(-1.0, 10.0)
         m_data = torch.linspace(-10.0, 10.0)
@@ -111,7 +111,7 @@ class TestBaseHysteresis:
         H.current()
         result = H()
         assert torch.isclose(result, torch.tensor(1.0, dtype=torch.float64), rtol=1e-3)
-        
+
         # should throw error if no data specified
         H2 = BaseHysteresis()
         with pytest.raises(HysteresisError):
@@ -163,8 +163,7 @@ class TestBaseHysteresis:
         # test with and without prior data
         for initial_history in [None, h_data]:
             if initial_history is None:
-                H = BaseHysteresis(fixed_domain=torch.tensor((1.0,
-                                                                    10.0)).double())
+                H = BaseHysteresis(fixed_domain=torch.tensor((1.0, 10.0)).double())
             else:
                 H = BaseHysteresis(initial_history)
 

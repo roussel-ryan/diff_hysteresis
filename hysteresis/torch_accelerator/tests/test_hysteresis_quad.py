@@ -78,8 +78,7 @@ class TestHysteresisQuad:
             # apply new field
             new_H = torch.tensor(0.5)
             HQ.apply_field(new_H)
-            
+
             # predict with current
             HQ.current()
-            assert HQ().shape == torch.Size([6,6])
-            
+            assert HQ().shape == torch.Size([6, 6])

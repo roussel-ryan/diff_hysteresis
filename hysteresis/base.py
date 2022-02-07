@@ -20,19 +20,18 @@ class HysteresisError(Exception):
 
 class BaseHysteresis(Module, ModeModule):
     def __init__(
-            self,
-            train_h: Tensor = None,
-            train_m: Tensor = None,
-            trainable: bool = True,
-            tkwargs: Dict = None,
-            mesh_scale: float = 1.0,
-            mesh_density_function: Callable = None,
-            polynomial_degree: int = 1,
-            polynomial_fit_iterations: int = 3000,
-            temp: float = 1e-2,
-            use_normalized_density: bool = True,
-            fixed_domain: Tensor = None,
-
+        self,
+        train_h: Tensor = None,
+        train_m: Tensor = None,
+        trainable: bool = True,
+        tkwargs: Dict = None,
+        mesh_scale: float = 1.0,
+        mesh_density_function: Callable = None,
+        polynomial_degree: int = 1,
+        polynomial_fit_iterations: int = 3000,
+        temp: float = 1e-2,
+        use_normalized_density: bool = True,
+        fixed_domain: Tensor = None,
     ):
         super(BaseHysteresis, self).__init__()
 
@@ -69,7 +68,7 @@ class BaseHysteresis(Module, ModeModule):
         ]
 
         for param_name, param_val, param_constraint in zip(
-                param_names, param_vals, param_constraints
+            param_names, param_vals, param_constraints
         ):
             self.register_parameter(param_name, Parameter(param_val))
             self.register_constraint(param_name, param_constraint)
@@ -95,11 +94,7 @@ class BaseHysteresis(Module, ModeModule):
         if not self.trainable:
             self.transformer.freeze()
 
-    def set_history(
-            self,
-            history_h,
-            history_m=None
-    ):
+    def set_history(self, history_h, history_m=None):
         """set historical state values and recalculate hysterion states"""
         if self.trainable:
             self.transformer = HysteresisTransform(
@@ -107,18 +102,18 @@ class BaseHysteresis(Module, ModeModule):
                 history_m,
                 self._fixed_domain,
                 self.polynomial_degree,
-                self.polynomial_fit_iterations
+                self.polynomial_fit_iterations,
             )
 
         if isinstance(history_h, Tensor):
             history_h = history_h.to(**self.tkwargs)
             if len(history_h.shape) != 1:
-                raise ValueError('history_h must be a 1D tensor')
+                raise ValueError("history_h must be a 1D tensor")
 
         if isinstance(history_m, Tensor):
             history_m = history_m.to(**self.tkwargs)
             if len(history_h.shape) != 1:
-                raise ValueError('history_m must be a 1D tensor')
+                raise ValueError("history_m must be a 1D tensor")
 
             if torch.equal(history_h, history_m):
                 raise RuntimeError("train h and train m cannot be equal")
@@ -142,11 +137,11 @@ class BaseHysteresis(Module, ModeModule):
 
     def apply_field(self, h):
         """
-        updates magnet history and recalculates 
+        updates magnet history and recalculates
         """
         h = torch.atleast_1d(h)
         self._check_inside_valid_domain(h)
-        if hasattr(self, '_history_h'):
+        if hasattr(self, "_history_h"):
             _history_h = torch.cat(
                 (self._history_h, self.transformer.transform(h)[0])
             ).detach()
@@ -171,7 +166,7 @@ class BaseHysteresis(Module, ModeModule):
             self._check_inside_valid_domain(x)
         else:
             if self.mode != CURRENT:
-                raise HysteresisError('must specify field when not using CURRENT mode')
+                raise HysteresisError("must specify field when not using CURRENT mode")
 
         # get current state/field if available
         if hasattr(self, "history_h"):
@@ -184,7 +179,7 @@ class BaseHysteresis(Module, ModeModule):
         if self.mode == FITTING:
             if not hasattr(self, "history_h"):
                 raise RuntimeError(
-                    "no training data supplied to do fitting! Try "
+                    "no training.py data supplied to do fitting! Try "
                     "using FUTURE mode instead OR set data using "
                     "set_history()"
                 )
@@ -192,11 +187,12 @@ class BaseHysteresis(Module, ModeModule):
             if self._history_h.shape != self._history_m.shape:
                 raise HysteresisError("history datasets must match shape for fitting")
 
-            if not torch.allclose(x,
-                                  self.transformer.untransform(self._history_h)[0].to(
-                                      x)):
+            if not torch.allclose(
+                x, self.transformer.untransform(self._history_h)[0].to(x)
+            ):
                 raise HysteresisError(
-                    "must do regression on history fields if in FITTING mode")
+                    "must do regression on history fields if in FITTING mode"
+                )
             states = self._states
             norm_h = self._history_h
 
@@ -258,7 +254,7 @@ class BaseHysteresis(Module, ModeModule):
     def _check_inside_valid_domain(self, values):
         machine_error = 1e-4
         if torch.any(values < self.valid_domain[0] - machine_error) or torch.any(
-                values > self.valid_domain[1] + machine_error
+            values > self.valid_domain[1] + machine_error
         ):
             raise HysteresisError(
                 f"Argument values are not inside valid domain ("

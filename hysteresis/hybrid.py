@@ -34,11 +34,13 @@ class ExactHybridGP(ModeModule, GP):
         if not (len(set(self.hysteresis_models)) == len(self.hysteresis_models)):
             raise ValueError("all hysteresis models must be unique")
 
-        # check that training data is the correct size
+        # check that training.py data is the correct size
         self.input_dim = train_x.shape[-1]
         if self.input_dim != len(self.hysteresis_models):
-            raise ValueError("training data must match the number of hysteresis models")
-        
+            raise ValueError(
+                "training.py data must match the number of hysteresis models"
+            )
+
         # set hysteresis model history data
         self._set_hysteresis_model_train_data(train_x)
 
@@ -47,7 +49,7 @@ class ExactHybridGP(ModeModule, GP):
 
         self.m_transform = Normalize(self.input_dim)
 
-        #train outcome transform
+        # train outcome transform
         self.outcome_transform = Standardize(1)
         self.outcome_transform.train()
         self.train_targets = self.outcome_transform(train_y.unsqueeze(1))[0].flatten()
@@ -56,11 +58,7 @@ class ExactHybridGP(ModeModule, GP):
         # get magnetization from hysteresis models
         train_m = self.get_magnetization(train_x, mode=FITTING).detach()
 
-        self.gp = SingleTaskGP(
-            train_m,
-            train_y.unsqueeze(1),
-            **kwargs
-        )
+        self.gp = SingleTaskGP(train_m, train_y.unsqueeze(1), **kwargs)
 
     def __call__(self, *inputs, **kwargs):
         return self.forward(*inputs, **kwargs)
@@ -68,14 +66,14 @@ class ExactHybridGP(ModeModule, GP):
     def _set_hysteresis_model_train_data(self, train_h):
         for idx, hyst_model in enumerate(self.hysteresis_models):
             hyst_model.set_history(train_h[:, idx])
-        
+
     def apply_fields(self, x: Tensor):
         for idx, hyst_model in enumerate(self.hysteresis_models):
             hyst_model.apply_field(x[:, idx])
 
     def get_magnetization(self, X, mode=None):
         train_m = []
-        # set applied fields and calculate magnetization for training data
+        # set applied fields and calculate magnetization for training.py data
         for idx, hyst_model in enumerate(self.hysteresis_models):
             hyst_model.mode = mode or self.mode
             train_m += [hyst_model(X[..., idx], return_real=True)]
@@ -97,11 +95,13 @@ class ExactHybridGP(ModeModule, GP):
             raise HysteresisError("calling posterior requires NEXT mode")
         M = self.get_normalized_magnetization(X)
 
-        return self.gp.posterior(M.double(), observation_noise=observation_noise,
-                                 **kwargs)
+        return self.gp.posterior(
+            M.double(), observation_noise=observation_noise, **kwargs
+        )
 
-    def forward(self, X, from_magnetization=False, return_real=False,
-                return_likelihood=False):
+    def forward(
+        self, X, from_magnetization=False, return_real=False, return_likelihood=False
+    ):
         train_m = self.get_normalized_magnetization(X)
 
         if self.training:
@@ -112,7 +112,8 @@ class ExactHybridGP(ModeModule, GP):
             return self.outcome_transform.untransform_posterior(lk)
 
         elif return_real:
-            return self.outcome_transform.untransform_posterior(self.gp(
-                train_m.unsqueeze(-1)))
+            return self.outcome_transform.untransform_posterior(
+                self.gp(train_m.unsqueeze(-1))
+            )
         else:
             return self.gp(train_m)

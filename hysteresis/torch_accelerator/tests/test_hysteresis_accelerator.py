@@ -4,10 +4,13 @@ import torch
 
 from hysteresis.torch_accelerator.hysteresis import BaseHysteresis
 from hysteresis.torch_accelerator.first_order import TorchDrift
-from hysteresis.torch_accelerator.hysteresis import HysteresisQuad, HysteresisAccelerator
+from hysteresis.torch_accelerator.hysteresis import (
+    HysteresisQuad,
+    HysteresisAccelerator,
+)
 
 
-def density_function(mesh_pts, h = 0.5):
+def density_function(mesh_pts, h=0.5):
     x = mesh_pts[:, 0]
     y = mesh_pts[:, 1]
     return torch.exp(-(y - x) / h)
@@ -16,11 +19,9 @@ def density_function(mesh_pts, h = 0.5):
 class TestHysteresisAccelerator:
     def test_basic(self):
         H = BaseHysteresis(
-            mesh_scale=0.1,
-            trainable=False,
-            fixed_domain=torch.tensor((-1.0, 1.0))
+            mesh_scale=0.1, trainable=False, fixed_domain=torch.tensor((-1.0, 1.0))
         )
-        #H.hysterion_density = density_function(H.mesh_points, 0.0001)
+        # H.hysterion_density = density_function(H.mesh_points, 0.0001)
         H.slope = 400.0
         H.scale = 0.0
         H.offset = -H.slope / 2.0
@@ -31,29 +32,26 @@ class TestHysteresisAccelerator:
         HA = HysteresisAccelerator([q1, d1])
         init_beam_matrix = torch.eye(6)
 
-        HA.apply_fields({'q1': torch.zeros(1)})
+        HA.apply_fields({"q1": torch.zeros(1)})
 
         HA.current()
         m1 = HA(init_beam_matrix)
 
-        HA.apply_fields({'q1': torch.ones(1)})
+        HA.apply_fields({"q1": torch.ones(1)})
         m2 = HA(init_beam_matrix)
         assert not torch.equal(m1, m2)
 
-        HA.apply_fields({'q1': torch.zeros(1)})
+        HA.apply_fields({"q1": torch.zeros(1)})
         m3 = HA(init_beam_matrix)
         assert torch.equal(m1, m3)
 
         assert torch.equal(
-            HA.elements['q1'].hysteresis_model.history_h,
-            torch.tensor((0.0, 1.0, 0.0)).double()
+            HA.elements["q1"].hysteresis_model.history_h,
+            torch.tensor((0.0, 1.0, 0.0)).double(),
         )
 
     def test_set_histories(self):
-        H = BaseHysteresis(
-            trainable=False,
-            fixed_domain=torch.tensor((-1.0, 1.0))
-        )
+        H = BaseHysteresis(trainable=False, fixed_domain=torch.tensor((-1.0, 1.0)))
         # H.hysterion_density = density_function(H.mesh_points, 0.0001)
         H.slope = 400.0
         H.scale = 0.0
@@ -66,12 +64,9 @@ class TestHysteresisAccelerator:
 
         new_histories = torch.rand(3, 2).double()
         HA.set_histories(new_histories)
-        assert torch.equal(HA.elements['q1'].hysteresis_model.history_h,
-                           new_histories[:,0])
-        assert torch.equal(HA.elements['q2'].hysteresis_model.history_h,
-                           new_histories[:, 1])
-
-
-
-
-
+        assert torch.equal(
+            HA.elements["q1"].hysteresis_model.history_h, new_histories[:, 0]
+        )
+        assert torch.equal(
+            HA.elements["q2"].hysteresis_model.history_h, new_histories[:, 1]
+        )

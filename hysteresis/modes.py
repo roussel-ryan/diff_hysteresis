@@ -19,7 +19,7 @@ class ModeModule(Module):
         assert value in [REGRESSION, NEXT, FUTURE, FITTING, CURRENT]
         self._mode = value
 
-        # if mode is FITTING set module to training
+        # if mode is FITTING set module to training.py
         if value == FITTING:
             self.train()
         else:
@@ -40,6 +40,6 @@ class ModeModule(Module):
 
     def future(self):
         self.mode = FUTURE
-        
+
     def current(self):
         self.mode = CURRENT

@@ -87,8 +87,5 @@ class TestStateCalc:
         # test different sized tensors for h - requires last dim to be 1
         tests = [torch.rand(10, 20), torch.rand(10), torch.rand(2, 4, 5)]
         for t in tests:
-            out = predict_batched_state(
-                t, mesh, current_state, current_field
-            )
+            out = predict_batched_state(t, mesh, current_state, current_field)
             assert out.shape == torch.Size([*t.shape, len(mesh)])
-

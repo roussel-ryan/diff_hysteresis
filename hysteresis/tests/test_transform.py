@@ -22,12 +22,10 @@ class TestHysteresisTransform:
 
         assert torch.allclose(train_m, t2.untransform(hn, mn)[1], rtol=0.01)
         assert torch.allclose(train_m, t2.get_fit(train_h), rtol=0.5)
-        
-        
+
     def test_fixed(self):
-        t = HysteresisTransform(fixed_domain = torch.tensor((-10.0, 5.0)))
+        t = HysteresisTransform(fixed_domain=torch.tensor((-10.0, 5.0)))
         assert torch.equal(t.domain, torch.tensor((-10.0, 5.0)))
-        
+
         with pytest.raises(RuntimeError):
-            t.domain = torch.tensor((0.0,1.0))
-        
+            t.domain = torch.tensor((0.0, 1.0))
