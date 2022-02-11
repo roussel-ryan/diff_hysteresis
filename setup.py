@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name="bayesian_hysteresis",
+    name="diff_hysteresis",
     version="",
     packages=["hysteresis", "hysteresis.tests", "torchAccelerator"],
     url="",
