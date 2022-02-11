@@ -6,5 +6,6 @@ supports and reproduces plots found in the paper: ###
 
 ---
 ## Installation
-This package can be installed via 
+The environment for this package can be set up by running the command
+```conda env create -f environment.yml```
 
