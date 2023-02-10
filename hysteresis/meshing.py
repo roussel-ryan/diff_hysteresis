@@ -29,7 +29,7 @@ def create_triangle_mesh(mesh_scale, mesh_density_function=None):
 
         # set mesh size with function
         geom.set_mesh_size_callback(
-            lambda dim, tag, x, y, z: mesh_density_function(x, y, mesh_scale)
+            lambda dim, tag, x, y, z, lc: mesh_density_function(x, y, mesh_scale)
         )
 
         mesh = geom.generate_mesh()
