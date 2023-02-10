@@ -32,6 +32,7 @@ class BaseHysteresis(Module, ModeModule):
         temp: float = 1e-2,
         use_normalized_density: bool = True,
         fixed_domain: Tensor = None,
+        fixed_scaling: bool = False,
     ):
         """
         Implementation of a differentiable Preisach hysteresis model using pyTorch.
@@ -109,9 +110,9 @@ class BaseHysteresis(Module, ModeModule):
 
         self.tkwargs = tkwargs or {}
         self.tkwargs.update({"dtype": torch.double, "device": "cpu"})
-
+        self.fixed_scaling = fixed_scaling
         # initialize with empty transformer
-        self.transformer = HysteresisTransform(fixed_domain=fixed_domain)
+        self.transformer = HysteresisTransform(train_h, fixed_domain=fixed_domain)
 
         self.trainable = trainable
 
@@ -149,6 +150,9 @@ class BaseHysteresis(Module, ModeModule):
             if not self.trainable:
                 getattr(self, param_name).requires_grad = False
 
+            if self.fixed_scaling and param_name in ["raw_slope", "raw_offset"]:
+                getattr(self, param_name).requires_grad = False
+
         # set initial values for linear parameters
         self.offset = torch.zeros(1)
         self.scale = torch.ones(1)
@@ -163,13 +167,13 @@ class BaseHysteresis(Module, ModeModule):
         if isinstance(train_h, Tensor):
             self.set_history(train_h, train_m)
 
-        # freeze transformer if not trainable model
-        if not self.trainable:
+        # freeze transformer if not trainable model or if fixed_scaling
+        if not self.trainable or self.fixed_scaling:
             self.transformer.freeze()
 
     def set_history(self, history_h, history_m=None):
         """set historical state values and recalculate hysterion states"""
-        if self.trainable:
+        if self.trainable and not self.fixed_scaling:
             self.transformer = HysteresisTransform(
                 history_h,
                 history_m,
@@ -177,6 +181,7 @@ class BaseHysteresis(Module, ModeModule):
                 self.polynomial_degree,
                 self.polynomial_fit_iterations,
             )
+
 
         if isinstance(history_h, Tensor):
             history_h = history_h.to(**self.tkwargs)
